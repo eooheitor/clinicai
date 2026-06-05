@@ -1,0 +1,26 @@
+{
+  "name": "clinicai",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "db:migrate": "npm run prisma:migrate --workspace=apps/api",
+    "db:deploy": "npm run prisma:deploy --workspace=apps/api",
+    "db:studio": "npm run prisma:studio --workspace=apps/api",
+    "db:generate": "npm run prisma:generate --workspace=apps/api",
+    "postinstall": "npm run prisma:generate --workspace=apps/api"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=7.0.0"
+  }
+}

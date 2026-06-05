@@ -1,0 +1,123 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(CLINIC)
+  active    Boolean  @default(true)
+  clinicId  String?
+  clinic    Clinic?  @relation(fields: [clinicId], references: [id])
+
+  @@map("users")
+}
+
+model Clinic {
+  id                  String         @id @default(cuid())
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  name                String
+  slug                String         @unique
+  phone               String?
+  evolutionInstance   String         @unique
+  aiName              String         @default("Ana")
+  systemPrompt        String
+  services            Json           @default("[]")
+  workingHours        Json           @default("{}")
+  calendarId          String?
+  googleRefreshToken  String?
+  appointmentDuration Int            @default(60)
+  active              Boolean        @default(true)
+  adminPhone          String?
+  requiredDocs        Json           @default("[]")
+  companyInfo         String?
+  aiObjective         String         @default("agendamento")
+  reminderEnabled     Boolean            @default(false)
+  subscriptionStatus    SubscriptionStatus @default(TRIAL)
+  trialEndsAt           DateTime?
+  subscriptionExpiresAt DateTime?
+  mpSubscriptionId      String?            @unique
+  appointments        Appointment[]
+  conversations       Conversation[]
+  users               User[]
+
+  @@map("clinics")
+}
+
+model Conversation {
+  id                   String    @id @default(cuid())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  clinicId             String
+  contactPhone         String
+  contactName          String?
+  humanMode            Boolean   @default(false)
+  humanModeActivatedAt DateTime?
+  triagemCompleta      Boolean   @default(false)
+  triagemCompletaAt    DateTime?
+  clinic               Clinic    @relation(fields: [clinicId], references: [id])
+  messages             Message[]
+
+  @@unique([clinicId, contactPhone])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  conversationId String
+  role           String
+  content        String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@map("messages")
+}
+
+model Appointment {
+  id            String            @id @default(cuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  clinicId      String
+  patientPhone  String
+  patientName   String
+  service       String
+  notes         String?
+  scheduledAt   DateTime
+  endsAt        DateTime
+  googleEventId String?
+  status        AppointmentStatus @default(CONFIRMED)
+  reminderSent  Boolean           @default(false)
+  clinic        Clinic            @relation(fields: [clinicId], references: [id])
+
+  @@map("appointments")
+}
+
+enum UserRole {
+  MASTER
+  CLINIC
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
