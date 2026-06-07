@@ -140,7 +140,7 @@ export default function ClientesPage() {
           </div>
           <div className="flex gap-2 sm:flex-col lg:flex-row">
             <Button onClick={() => router.push(`/conversas/${selected.id}`)}><MessageSquare className="size-4" /> Abrir conversa</Button>
-            <Button variant="outline" render={<a href={`tel:${selected.contactPhone}`} />}><Phone className="size-4" /></Button>
+            <Button variant="outline" nativeButton={false} render={<a href={`tel:${selected.contactPhone}`} />}><Phone className="size-4" /></Button>
           </div>
         </div>
       </div>
