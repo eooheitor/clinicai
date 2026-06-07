@@ -324,6 +324,57 @@ router.get("/appointments", async (req, res) => {
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 
+// Criação manual de agendamento (painel)
+router.post("/appointments", async (req, res) => {
+  try {
+    const cId = clinicId(req);
+    const { patientName, patientPhone, service, scheduledAt, durationMinutes, notes } = req.body;
+    if (!patientName || !service || !scheduledAt) {
+      res.status(400).json({ error: "Nome, serviço e data/hora são obrigatórios" });
+      return;
+    }
+    const start = new Date(scheduledAt);
+    if (isNaN(start.getTime())) {
+      res.status(400).json({ error: "Data/hora inválida" });
+      return;
+    }
+    const clinic = await prisma.clinic.findUnique({ where: { id: cId } });
+    if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
+
+    const duration = Number(durationMinutes) || clinic.appointmentDuration || 60;
+    const end = new Date(start.getTime() + duration * 60_000);
+    const phone = patientPhone ? String(patientPhone).replace(/\D/g, "") : "";
+
+    let event: Awaited<ReturnType<typeof calendarService.createAppointment>> = null;
+    try {
+      event = await calendarService.createAppointment(clinic, {
+        patientName: String(patientName),
+        patientPhone: phone,
+        service: String(service),
+        start: start.toISOString(),
+        end: end.toISOString(),
+        notes: notes ? String(notes) : undefined,
+      });
+    } catch (err: any) {
+      console.warn(`⚠️  Agendamento manual salvo sem evento no Calendar: ${err?.message}`);
+    }
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        clinicId: cId,
+        patientName: String(patientName),
+        patientPhone: phone,
+        service: String(service),
+        notes: notes ? String(notes) : null,
+        scheduledAt: start,
+        endsAt: end,
+        googleEventId: event?.id ?? undefined,
+      },
+    });
+    res.status(201).json(appointment);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
 router.patch("/appointments/:id/cancel", async (req, res) => {
   try {
     await prisma.appointment.updateMany({
