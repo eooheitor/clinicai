@@ -36,6 +36,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [conv, setConv] = useState<Conversation | null>(null);
+  const [clientAppts, setClientAppts] = useState<Appt[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -52,10 +53,17 @@ export default function ClientesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedId) { setConv(null); return; }
+    if (!selectedId) { setConv(null); setClientAppts([]); return; }
     setConv(null);
+    setClientAppts([]);
+    const p = patients.find((x) => x.id === selectedId);
     api.get<Conversation>(`/panel/conversations/${selectedId}`).then(setConv).catch(() => {});
-  }, [selectedId]);
+    if (p) {
+      api.get<{ appointments: Appt[] }>(`/panel/appointments?phone=${encodeURIComponent(p.contactPhone)}`)
+        .then((d) => setClientAppts(d.appointments))
+        .catch(() => {});
+    }
+  }, [selectedId, patients]);
 
   const sorted = useMemo(() => {
     const arr = [...patients];
@@ -65,9 +73,9 @@ export default function ClientesPage() {
   }, [patients, sort]);
 
   const selected = patients.find((p) => p.id === selectedId) ?? null;
-  const selectedAppts = selected
-    ? appts.filter((a) => a.patientPhone === selected.contactPhone).sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt))
-    : [];
+  const upcomingAppts = clientAppts
+    .filter((a) => +new Date(a.scheduledAt) >= Date.now())
+    .sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
 
   const list = (
     <aside className="flex h-full w-full flex-col border-border md:w-[340px] md:shrink-0 md:border-r lg:w-[380px]">
@@ -142,17 +150,17 @@ export default function ClientesPage() {
         <div className="space-y-5">
           <div className="grid grid-cols-3 gap-3">
             <Tile icon={MessageSquare} label="Mensagens" value={selected._count.messages} />
-            <Tile icon={CalendarDays} label="Consultas" value={selectedAppts.length} />
+            <Tile icon={CalendarDays} label="Consultas" value={clientAppts.length} />
             <Tile icon={UserRound} label="Cliente" value={null} sub={formatDistanceToNow(new Date(selected.updatedAt), { locale: ptBR, addSuffix: true })} />
           </div>
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Próximos agendamentos</p>
-            {selectedAppts.length === 0 ? (
+            {upcomingAppts.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Nenhum agendamento futuro.</p>
             ) : (
               <div className="space-y-2">
-                {selectedAppts.map((a) => (
+                {upcomingAppts.map((a) => (
                   <div key={a.id} className="surface flex items-center gap-3 rounded-xl p-3">
                     <div className="flex size-10 shrink-0 flex-col items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent-strong)]">
                       <span className="font-display text-sm font-semibold leading-none">{format(new Date(a.scheduledAt), "dd")}</span>
