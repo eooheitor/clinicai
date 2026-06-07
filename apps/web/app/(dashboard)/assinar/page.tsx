@@ -3,17 +3,22 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { getUser } from "@/lib/auth";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Loader2, MessageSquare, Calendar, Bot, Smartphone, Zap } from "lucide-react";
+import { Reveal } from "@/components/motion";
+import {
+  Check, Loader2, MessageSquare, Calendar, Bot, Smartphone, Zap, ShieldCheck, Sparkles, Clock, Infinity as InfinityIcon,
+} from "lucide-react";
 
 const features = [
-  { icon: Bot,           label: "Atendente IA 24/7 no WhatsApp" },
-  { icon: Calendar,      label: "Agendamentos automáticos" },
-  { icon: MessageSquare, label: "Conversas ilimitadas" },
-  { icon: Smartphone,    label: "Instância WhatsApp dedicada" },
-  { icon: Zap,           label: "Integração com Google Calendar" },
+  { icon: Bot, label: "Atendente IA 24/7 no WhatsApp" },
+  { icon: Calendar, label: "Agendamentos automáticos" },
+  { icon: InfinityIcon, label: "Conversas ilimitadas" },
+  { icon: Smartphone, label: "Instância dedicada do WhatsApp" },
+  { icon: Zap, label: "Integração com Google Calendar" },
+  { icon: Clock, label: "Lembretes automáticos de consulta" },
 ];
+
+const wrap = "px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
 
 export default function AssinarPage() {
   const [loading, setLoading] = useState(false);
@@ -33,60 +38,68 @@ export default function AssinarPage() {
   }
 
   return (
-    <div className="p-8 max-w-lg">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Assinar ClinicAI</h1>
-        <p className="text-muted-foreground mt-1">Continue usando sem interrupções após o trial</p>
-      </div>
+    <div className={`${wrap} space-y-6`}>
+      <Reveal>
+        <div className="bg-aurora surface relative overflow-hidden rounded-3xl">
+          <div className="bg-grid pointer-events-none absolute inset-0 opacity-30" />
+          <div className="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+            {/* Left: pitch */}
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent-strong)]">
+                <Sparkles className="size-3" /> Plano Profissional
+              </span>
+              <h2 className="mt-4 font-display text-4xl font-semibold leading-[1.05] tracking-[-0.02em] text-foreground">
+                Continue atendendo no <span className="text-gradient italic">piloto automático</span>.
+              </h2>
+              <p className="mt-3 max-w-md text-sm text-muted-foreground">
+                Mantenha sua IA respondendo, qualificando e agendando sem interrupções após o período de teste.
+              </p>
 
-      <Card className="border-[var(--border-m)] shadow-[0_0_40px_rgba(0,210,200,.08)]">
-        <CardContent className="p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-end gap-1 mb-1">
-              <span className="text-5xl font-bold text-foreground">R$150</span>
-              <span className="text-muted-foreground mb-2">/mês</span>
+              <ul className="mt-6 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                {features.map(({ icon: Icon, label }) => (
+                  <li key={label} className="flex items-center gap-2.5 text-sm text-foreground">
+                    <span className="flex size-6 items-center justify-center rounded-md bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                      <Icon className="size-3.5" />
+                    </span>
+                    {label}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <p className="text-sm text-muted-foreground">Cartão, PIX ou boleto — sem precisar de conta Mercado Pago</p>
+
+            {/* Right: price card */}
+            <div className="surface elevate-lg rounded-2xl p-7">
+              <div className="text-center">
+                <div className="flex items-end justify-center gap-1.5">
+                  <span className="font-display text-5xl font-semibold tracking-[-0.03em] text-foreground">R$150</span>
+                  <span className="mb-2 text-muted-foreground">/mês</span>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">Cartão, PIX ou boleto — sem precisar de conta no Mercado Pago</p>
+              </div>
+
+              {error && (
+                <p className="mt-5 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+              )}
+
+              <Button onClick={handleSubscribe} disabled={loading} size="lg" className="mt-6 w-full">
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {loading ? "Aguarde..." : "Assinar agora"}
+              </Button>
+
+              <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+                <p className="flex items-center justify-center gap-1.5"><ShieldCheck className="size-3.5 text-[var(--accent-strong)]" /> Pagamento 100% seguro via Mercado Pago</p>
+                <p className="text-center">Cancele quando quiser, sem multa.</p>
+              </div>
+
+              {user?.clinic && (
+                <p className="mt-5 border-t border-border pt-4 text-center text-xs text-muted-foreground">
+                  Assinatura para <span className="font-medium text-foreground">{user.clinic.name}</span>
+                </p>
+              )}
+            </div>
           </div>
-
-          <ul className="space-y-3 mb-8">
-            {features.map(({ icon: Icon, label }) => (
-              <li key={label} className="flex items-center gap-3 text-sm text-foreground">
-                <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                {label}
-              </li>
-            ))}
-          </ul>
-
-          {error && (
-            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2 rounded-lg mb-4">
-              {error}
-            </p>
-          )}
-
-          <Button
-            onClick={handleSubscribe}
-            disabled={loading}
-            className="w-full bg-[var(--cta)] hover:bg-[var(--cta-h)] text-[var(--bg-0)] font-semibold shadow-[0_0_24px_var(--cta-glow)] transition-all h-12 text-base"
-          >
-            {loading ? (
-              <><Loader2 className="h-4 w-4 animate-spin mr-2" />Aguarde...</>
-            ) : (
-              "Pagar com Mercado Pago"
-            )}
-          </Button>
-
-          <p className="text-xs text-muted-foreground text-center mt-3">
-            Cancele quando quiser. Pagamento 100% seguro via Mercado Pago.
-          </p>
-        </CardContent>
-      </Card>
-
-      {user?.clinic && (
-        <p className="text-xs text-muted-foreground mt-4 text-center">
-          Assinatura para: <span className="text-foreground font-medium">{user.clinic.name}</span>
-        </p>
-      )}
+        </div>
+      </Reveal>
     </div>
   );
 }
