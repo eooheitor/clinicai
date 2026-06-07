@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { Field } from "@/components/field";
-import { cn } from "@/lib/utils";
+import { cn, maskPhoneBR } from "@/lib/utils";
 import {
   Bot, Clock, Plus, X, Save, Stethoscope, Scale, ShoppingBag, Wrench, Target,
   CalendarCheck, CalendarX, Bell, Building2, FileText, Info, Check, Plug,
@@ -341,11 +341,11 @@ export default function ConfiguracaoPage() {
                 <Input id="name" value={settings.name} onChange={(e) => update("name", e.target.value)} />
               </Field>
               <Field label="WhatsApp do negócio" htmlFor="phone">
-                <Input id="phone" placeholder="5511999999999" value={settings.phone} onChange={(e) => update("phone", e.target.value)} />
+                <Input id="phone" inputMode="tel" placeholder="+55 (11) 99999-9999" value={maskPhoneBR(settings.phone)} onChange={(e) => update("phone", e.target.value.replace(/\D/g, ""))} />
               </Field>
             </div>
             <Field label="WhatsApp do admin (notificações)" htmlFor="adminPhone" className="mt-4">
-              <Input id="adminPhone" placeholder="5511999999999" value={settings.adminPhone} onChange={(e) => update("adminPhone", e.target.value)} />
+              <Input id="adminPhone" inputMode="tel" placeholder="+55 (11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", e.target.value.replace(/\D/g, ""))} />
             </Field>
           </SectionCard>
         </div>

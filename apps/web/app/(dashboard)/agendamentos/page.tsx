@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
 import { CalendarWeek, type CalEvent } from "@/components/calendar-week";
-import { cn } from "@/lib/utils";
+import { cn, maskPhoneBR } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, CalendarDays, Clock, Phone, X, Plus, Loader2,
 } from "lucide-react";
@@ -338,7 +338,7 @@ export default function AgendamentosPage() {
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="WhatsApp" htmlFor="ap-phone">
-                <Input id="ap-phone" value={form.patientPhone} onChange={(e) => setForm((f) => ({ ...f, patientPhone: e.target.value }))} placeholder="5511999999999" />
+                <Input id="ap-phone" inputMode="tel" value={maskPhoneBR(form.patientPhone)} onChange={(e) => setForm((f) => ({ ...f, patientPhone: e.target.value.replace(/\D/g, "") }))} placeholder="+55 (11) 99999-9999" />
               </Field>
               <Field label="Serviço" htmlFor="ap-service">
                 <Input id="ap-service" list="ap-services" value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} placeholder="Avaliação inicial" />
