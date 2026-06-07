@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { Field } from "@/components/field";
-import { cn, maskPhoneBR } from "@/lib/utils";
+import { cn, maskPhoneBR, localPhoneBR, toStoredPhoneBR } from "@/lib/utils";
 import {
   Bot, Clock, Plus, X, Save, Stethoscope, Scale, ShoppingBag, Wrench, Target,
   CalendarCheck, CalendarX, Bell, Building2, FileText, Info, Check, Plug,
@@ -158,8 +158,8 @@ export default function ConfiguracaoPage() {
         name: data.name ?? "",
         aiName: data.aiName ?? "",
         systemPrompt: data.systemPrompt ?? "",
-        phone: data.phone ?? "",
-        adminPhone: data.adminPhone ?? "",
+        phone: localPhoneBR(data.phone),
+        adminPhone: localPhoneBR(data.adminPhone),
         services: Array.isArray(data.services) ? data.services : [],
         requiredDocs: Array.isArray(data.requiredDocs) ? data.requiredDocs : [],
         workingHours:
@@ -262,7 +262,11 @@ export default function ConfiguracaoPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      await api.patch("/panel/settings", settings);
+      await api.patch("/panel/settings", {
+        ...settings,
+        phone: toStoredPhoneBR(settings.phone),
+        adminPhone: toStoredPhoneBR(settings.adminPhone),
+      });
       setSaved(true);
       toast.success("Configurações salvas");
       setTimeout(() => setSaved(false), 2500);
@@ -341,11 +345,11 @@ export default function ConfiguracaoPage() {
                 <Input id="name" value={settings.name} onChange={(e) => update("name", e.target.value)} />
               </Field>
               <Field label="WhatsApp do negócio" htmlFor="phone">
-                <Input id="phone" inputMode="tel" placeholder="+55 (11) 99999-9999" value={maskPhoneBR(settings.phone)} onChange={(e) => update("phone", e.target.value.replace(/\D/g, ""))} />
+                <Input id="phone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.phone)} onChange={(e) => update("phone", localPhoneBR(e.target.value))} />
               </Field>
             </div>
             <Field label="WhatsApp do admin (notificações)" htmlFor="adminPhone" className="mt-4">
-              <Input id="adminPhone" inputMode="tel" placeholder="+55 (11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", e.target.value.replace(/\D/g, ""))} />
+              <Input id="adminPhone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", localPhoneBR(e.target.value))} />
             </Field>
           </SectionCard>
         </div>

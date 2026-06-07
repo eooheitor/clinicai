@@ -5,28 +5,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Formats a Brazilian phone number for display. Accepts/keeps only digits internally. */
+/** Local Brazilian digits (DDD + number), country code 55 stripped. */
+export function localPhoneBR(value?: string | null): string {
+  let d = (value ?? "").replace(/\D/g, "")
+  if (d.length > 11 && d.startsWith("55")) d = d.slice(2)
+  return d.slice(0, 11)
+}
+
+/** Stored/E.164-ish value with Brazil country code (55) — applied behind the scenes. */
+export function toStoredPhoneBR(value?: string | null): string {
+  const local = localPhoneBR(value)
+  return local ? `55${local}` : ""
+}
+
+/** Display mask for a Brazilian phone WITHOUT the country code: (11) 99999-9999. */
 export function maskPhoneBR(value?: string | null): string {
-  const d = (value ?? "").replace(/\D/g, "").slice(0, 13)
+  const d = localPhoneBR(value)
   if (!d) return ""
-  let cc = ""
-  let rest = d
-  if (d.length > 11 && d.startsWith("55")) {
-    cc = "55"
-    rest = d.slice(2)
-  }
-  const ddd = rest.slice(0, 2)
-  const num = rest.slice(2)
-  let body: string
-  if (rest.length <= 2) {
-    body = `(${ddd}`
-  } else {
-    const firstLen = num.length > 8 ? 5 : 4
-    const first = num.slice(0, firstLen)
-    const last = num.slice(firstLen)
-    body = `(${ddd}) ${first}${last ? `-${last}` : ""}`
-  }
-  return cc ? `+${cc} ${body}` : body
+  const ddd = d.slice(0, 2)
+  const num = d.slice(2)
+  if (d.length <= 2) return `(${ddd}`
+  const firstLen = num.length > 8 ? 5 : 4
+  const first = num.slice(0, firstLen)
+  const last = num.slice(firstLen)
+  return `(${ddd}) ${first}${last ? `-${last}` : ""}`
 }
 
 /** Two-letter initials from a name or phone, for avatars. */
