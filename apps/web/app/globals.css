@@ -122,6 +122,7 @@
 
   /* Signature accent + gradient companion */
   --accent-strong: #0e9f6e;
+  --accent-hover: #0b8a5f;
   --accent-2: #0d9488;
   --accent-soft: rgba(14, 159, 110, 0.09);
   --accent-glow: rgba(14, 159, 110, 0.18);
@@ -192,6 +193,7 @@
   --txt-3: #62716a;
 
   --accent-strong: #34d399;
+  --accent-hover: #2bc88d;
   --accent-2: #2dd4bf;
   --accent-soft: rgba(52, 211, 153, 0.12);
   --accent-glow: rgba(52, 211, 153, 0.24);
