@@ -17,7 +17,7 @@ import {
 import {
   Area, AreaChart, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
-import { format, isToday } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface DashData {
@@ -28,6 +28,7 @@ interface DashData {
   appointmentsToday: number;
   appointmentsWeek: number;
   totalPatients: number;
+  topServices: { service: string; count: number }[];
   messagesLast7Days: { day: string; count: number }[];
 }
 interface Appt { id: string; patientName: string; service: string; scheduledAt: string; patientPhone: string; }
@@ -58,7 +59,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.get<DashData>("/panel/dashboard").then(setData).catch((e) => setError(e.message));
-    api.get<{ appointments: Appt[] }>("/panel/appointments").then((d) => setAppts(d.appointments)).catch(() => {});
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+    api
+      .get<{ appointments: Appt[] }>(`/panel/appointments?from=${start.toISOString()}&to=${end.toISOString()}`)
+      .then((d) => setAppts(d.appointments))
+      .catch(() => {});
     api.get<{ conversations: Conv[] }>("/panel/conversations?humanMode=true").then((d) => setAttention(d.conversations.slice(0, 5))).catch(() => {});
     api.get<{ conversations: Conv[] }>("/panel/conversations").then((d) => setRecent(d.conversations.slice(0, 6))).catch(() => {});
   }, []);
@@ -83,7 +91,7 @@ export default function DashboardPage() {
   const firstName = (user?.name ?? "").split(" ")[0] || "por aqui";
   const chartData = data.messagesLast7Days.map((d) => ({ day: format(new Date(d.day), "EEE", { locale: ptBR }), mensagens: d.count }));
   const spark = data.messagesLast7Days.map((d) => d.count);
-  const todayAppts = appts.filter((a) => isToday(new Date(a.scheduledAt))).sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
+  const todayAppts = [...appts].sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
 
   const concluidas = data.triagemCount;
   const andamento = Math.max(0, data.totalConversations - concluidas);
@@ -92,14 +100,12 @@ export default function DashboardPage() {
     { name: "Em andamento", value: andamento, color: "var(--muted-foreground)" },
   ];
 
-  const serviceMap = new Map<string, number>();
-  for (const a of appts) serviceMap.set(a.service, (serviceMap.get(a.service) ?? 0) + 1);
-  const topServices = [...serviceMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topServices: [string, number][] = (data.topServices ?? []).map((s) => [s.service, s.count]);
   const maxService = topServices[0]?.[1] ?? 1;
 
   const kpis = [
     { icon: MessageSquare, label: "Conversas hoje", value: data.activeToday, data: spark },
-    { icon: Calendar, label: "Consultas hoje", value: todayAppts.length },
+    { icon: Calendar, label: "Consultas hoje", value: data.appointmentsToday },
     {
       icon: UserCog, label: "Aguardando humano", value: data.humanModeCount,
       tone: data.humanModeCount > 0 ? ("warning" as const) : ("default" as const),
