@@ -30,6 +30,7 @@ const wrap = "px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
 
 export default function AgendamentosPage() {
   const [appts, setAppts] = useState<Appt[]>([]);
+  const [weekAppts, setWeekAppts] = useState<Appt[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"semana" | "lista">("semana");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -45,6 +46,19 @@ export default function AgendamentosPage() {
     load();
   }, []);
 
+  // Carrega a semana visível por intervalo (inclui passado e dias cheios)
+  const weekEnd = addDays(weekStart, 7);
+  async function loadWeek() {
+    const data = await api.get<{ appointments: Appt[] }>(
+      `/panel/appointments?from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`
+    );
+    setWeekAppts(data.appointments);
+  }
+  useEffect(() => {
+    loadWeek();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart]);
+
   async function cancel(id: string) {
     setCanceling(true);
     try {
@@ -52,6 +66,7 @@ export default function AgendamentosPage() {
       toast.success("Agendamento cancelado");
       setDetail(null);
       load();
+      loadWeek();
     } catch (err: any) {
       toast.error(err.message || "Erro ao cancelar");
     } finally {
@@ -59,10 +74,7 @@ export default function AgendamentosPage() {
     }
   }
 
-  const weekEnd = addDays(weekStart, 7);
-  const weekEvents: CalEvent[] = appts.filter(
-    (a) => +new Date(a.scheduledAt) >= +weekStart && +new Date(a.scheduledAt) < +weekEnd
-  );
+  const weekEvents: CalEvent[] = weekAppts;
 
   // Mini-month
   const monthDays = useMemo(() => {
