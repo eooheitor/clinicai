@@ -13,6 +13,7 @@
     "db:migrate": "npm run prisma:migrate --workspace=apps/api",
     "db:deploy": "npm run prisma:deploy --workspace=apps/api",
     "db:studio": "npm run prisma:studio --workspace=apps/api",
+    "db:seed": "npm run prisma:seed --workspace=apps/api",
     "db:generate": "npm run prisma:generate --workspace=apps/api",
     "postinstall": "npm run prisma:generate --workspace=apps/api"
   },
