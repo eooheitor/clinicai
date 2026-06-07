@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/dialog";
 import { Segmented } from "@/components/segmented";
 import { EmptyState } from "@/components/empty-state";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/components/field";
 import { CalendarWeek, type CalEvent } from "@/components/calendar-week";
 import { cn } from "@/lib/utils";
 import {
-  ChevronLeft, ChevronRight, CalendarDays, Clock, Phone, X,
+  ChevronLeft, ChevronRight, CalendarDays, Clock, Phone, X, Plus, Loader2,
 } from "lucide-react";
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -36,6 +38,17 @@ export default function AgendamentosPage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [detail, setDetail] = useState<Appt | null>(null);
   const [canceling, setCanceling] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [services, setServices] = useState<string[]>([]);
+  const emptyForm = { patientName: "", patientPhone: "", service: "", date: "", time: "09:00", durationMinutes: "", notes: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    api.get<{ services?: string[] }>("/panel/settings")
+      .then((s) => setServices(Array.isArray(s.services) ? s.services : []))
+      .catch(() => {});
+  }, []);
 
   async function load() {
     const data = await api.get<{ appointments: Appt[] }>("/panel/appointments");
@@ -71,6 +84,43 @@ export default function AgendamentosPage() {
       toast.error(err.message || "Erro ao cancelar");
     } finally {
       setCanceling(false);
+    }
+  }
+
+  function openCreate() {
+    setForm({ ...emptyForm, date: format(new Date(), "yyyy-MM-dd") });
+    setShowCreate(true);
+  }
+
+  async function createAppointment() {
+    if (!form.patientName || !form.service || !form.date || !form.time) {
+      toast.error("Preencha nome, serviço, data e hora");
+      return;
+    }
+    const scheduledAt = new Date(`${form.date}T${form.time}`);
+    if (isNaN(scheduledAt.getTime())) {
+      toast.error("Data/hora inválida");
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post("/panel/appointments", {
+        patientName: form.patientName,
+        patientPhone: form.patientPhone,
+        service: form.service,
+        scheduledAt: scheduledAt.toISOString(),
+        durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : undefined,
+        notes: form.notes || undefined,
+      });
+      toast.success("Agendamento criado");
+      setShowCreate(false);
+      setForm(emptyForm);
+      load();
+      loadWeek();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao criar agendamento");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -117,15 +167,20 @@ export default function AgendamentosPage() {
             {monthLabel}
           </h1>
         </div>
-        <Segmented
-          idBase="agenda-view"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "semana", label: "Semana" },
-            { value: "lista", label: "Lista" },
-          ]}
-        />
+        <div className="flex items-center gap-2">
+          <Segmented
+            idBase="agenda-view"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "semana", label: "Semana" },
+              { value: "lista", label: "Lista" },
+            ]}
+          />
+          <Button onClick={openCreate}>
+            <Plus className="size-4" /> Novo
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -267,6 +322,53 @@ export default function AgendamentosPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create dialog */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo agendamento</DialogTitle>
+            <DialogDescription>Marque uma consulta manualmente na agenda.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Field label="Nome do paciente" htmlFor="ap-name">
+              <Input id="ap-name" value={form.patientName} onChange={(e) => setForm((f) => ({ ...f, patientName: e.target.value }))} placeholder="Maria Oliveira" />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="WhatsApp" htmlFor="ap-phone">
+                <Input id="ap-phone" value={form.patientPhone} onChange={(e) => setForm((f) => ({ ...f, patientPhone: e.target.value }))} placeholder="5511999999999" />
+              </Field>
+              <Field label="Serviço" htmlFor="ap-service">
+                <Input id="ap-service" list="ap-services" value={form.service} onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))} placeholder="Avaliação inicial" />
+                <datalist id="ap-services">
+                  {services.map((s) => <option key={s} value={s} />)}
+                </datalist>
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Data" htmlFor="ap-date">
+                <Input id="ap-date" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+              </Field>
+              <Field label="Hora" htmlFor="ap-time">
+                <Input id="ap-time" type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} />
+              </Field>
+              <Field label="Duração (min)" htmlFor="ap-dur">
+                <Input id="ap-dur" type="number" min={15} step={15} value={form.durationMinutes} onChange={(e) => setForm((f) => ({ ...f, durationMinutes: e.target.value }))} placeholder="60" />
+              </Field>
+            </div>
+            <Field label="Observações" htmlFor="ap-notes">
+              <Input id="ap-notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Opcional" />
+            </Field>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={createAppointment} disabled={creating}>
+              {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {creating ? "Criando..." : "Criar agendamento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
