@@ -3,14 +3,19 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Clock, Plus, X, Save, Stethoscope, Scale, ShoppingBag, Wrench, Target, CalendarCheck, CalendarX, Bell } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
+import { Field } from "@/components/field";
+import { cn, maskPhoneBR, localPhoneBR, toStoredPhoneBR } from "@/lib/utils";
+import {
+  Bot, Clock, Plus, X, Save, Stethoscope, Scale, ShoppingBag, Wrench, Target,
+  CalendarCheck, CalendarX, Bell, Building2, FileText, Info, Check, Plug,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface DayHours {
@@ -131,6 +136,8 @@ SERVIÇOS OFERECIDOS:
   },
 ];
 
+const wrap = "px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8";
+
 export default function ConfiguracaoPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -140,6 +147,7 @@ export default function ConfiguracaoPage() {
   const [error, setError] = useState<string | null>(null);
   const [calendarIdInput, setCalendarIdInput] = useState("");
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [tab, setTab] = useState<"negocio" | "ia" | "docs" | "horarios" | "integracoes">("negocio");
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -150,13 +158,12 @@ export default function ConfiguracaoPage() {
         name: data.name ?? "",
         aiName: data.aiName ?? "",
         systemPrompt: data.systemPrompt ?? "",
-        phone: data.phone ?? "",
-        adminPhone: data.adminPhone ?? "",
+        phone: localPhoneBR(data.phone),
+        adminPhone: localPhoneBR(data.adminPhone),
         services: Array.isArray(data.services) ? data.services : [],
         requiredDocs: Array.isArray(data.requiredDocs) ? data.requiredDocs : [],
-        workingHours: Object.keys(data.workingHours || {}).length > 0
-          ? data.workingHours
-          : DEFAULT_HOURS,
+        workingHours:
+          Object.keys(data.workingHours || {}).length > 0 ? data.workingHours : DEFAULT_HOURS,
         companyInfo: data.companyInfo ?? "",
         aiObjective: data.aiObjective ?? "agendamento",
         calendarId: data.calendarId ?? null,
@@ -192,12 +199,15 @@ export default function ConfiguracaoPage() {
   }
 
   async function saveCalendarId() {
-    if (!calendarIdInput.trim()) { toast.error("Informe o Calendar ID"); return; }
+    if (!calendarIdInput.trim()) {
+      toast.error("Informe o Calendar ID");
+      return;
+    }
     setSavingCalendar(true);
     try {
       await api.patch("/panel/settings/calendar-id", { calendarId: calendarIdInput.trim() });
       toast.success("Calendar ID salvo");
-      setSettings((s) => s ? { ...s, calendarId: calendarIdInput.trim() } : s);
+      setSettings((s) => (s ? { ...s, calendarId: calendarIdInput.trim() } : s));
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -206,7 +216,7 @@ export default function ConfiguracaoPage() {
   }
 
   function update<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setSettings((s) => s ? { ...s, [key]: value } : s);
+    setSettings((s) => (s ? { ...s, [key]: value } : s));
   }
 
   function addDoc() {
@@ -252,393 +262,369 @@ export default function ConfiguracaoPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      await api.patch("/panel/settings", settings);
+      await api.patch("/panel/settings", {
+        ...settings,
+        phone: toStoredPhoneBR(settings.phone),
+        adminPhone: toStoredPhoneBR(settings.adminPhone),
+      });
       setSaved(true);
+      toast.success("Configurações salvas");
       setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar");
     } finally {
       setSaving(false);
     }
   }
 
-  if (error) return <div className="p-8 text-destructive">Erro ao carregar configurações: {error}</div>;
-  if (!settings) return <div className="p-8 text-muted-foreground">Carregando...</div>;
+  if (error) {
+    return (
+      <div className={wrap}>
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-6 text-sm text-destructive">
+          Erro ao carregar configurações: {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!settings) {
+    return (
+      <div className={wrap}>
+        <PageHeader title="Configurações" subtitle="Personalize sua IA e horários de atendimento" />
+        <div className="mt-6 h-64 animate-pulse rounded-2xl bg-muted" />
+      </div>
+    );
+  }
+
+  const docsLabel =
+    settings.aiObjective === "triagem"
+      ? "Informações para triagem"
+      : "Documentos necessários";
 
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Personalize sua IA e horários de atendimento</p>
-      </div>
+    <div className={wrap}>
+      <PageHeader title="Configurações" subtitle="Personalize sua IA e horários de atendimento" />
 
-      {/* Dados do negócio */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Dados do negócio</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Nome do negócio</Label>
-              <Input value={settings.name} onChange={(e) => update("name", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>WhatsApp do negócio</Label>
-              <Input placeholder="5511999999999" value={settings.phone} onChange={(e) => update("phone", e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>WhatsApp do admin (notificações)</Label>
-            <Input placeholder="5511999999999" value={settings.adminPhone} onChange={(e) => update("adminPhone", e.target.value)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Objetivo da IA */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Target className="h-4 w-4 text-primary" />
-            Objetivo da IA
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Define como a IA conduz o atendimento. O prompt e as ferramentas disponíveis mudam automaticamente conforme a opção escolhida.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              {
-                value: "agendamento",
-                title: "Agendamento",
-                description: "A IA verifica disponibilidade e agenda consultas ou serviços diretamente pelo WhatsApp.",
-              },
-              {
-                value: "triagem",
-                title: "Triagem",
-                description: "A IA coleta as informações do cliente e avisa que um profissional entrará em contato para analisar o caso.",
-              },
-            ].map((opt) => (
+      <div className="mt-6 grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+        {/* Vertical section nav */}
+        <nav className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:sticky lg:top-4 lg:mx-0 lg:flex-col lg:self-start lg:overflow-visible lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:p-2 lg:elevate-sm">
+          {[
+            { id: "negocio", label: "Negócio", icon: Building2 },
+            { id: "ia", label: "IA", icon: Bot },
+            { id: "docs", label: "Documentos", icon: FileText },
+            { id: "horarios", label: "Horários", icon: Clock },
+            { id: "integracoes", label: "Integrações", icon: Plug },
+          ].map((s) => {
+            const Icon = s.icon;
+            const active = tab === s.id;
+            return (
               <button
-                key={opt.value}
+                key={s.id}
                 type="button"
-                onClick={() => {
-                  const newObjective = opt.value as "agendamento" | "triagem";
-                  update("aiObjective", newObjective);
-                  if (selectedTemplate) {
-                    const tpl = TEMPLATES.find((t) => t.label === selectedTemplate);
-                    if (tpl) update("systemPrompt", tpl.prompts[newObjective]);
-                  }
-                }}
-                className={`text-left p-4 rounded-lg border-2 transition-all ${
-                  settings.aiObjective === opt.value
-                    ? "border-primary bg-[var(--aqua-glow)]"
-                    : "border-border hover:border-[var(--border-m)]"
-                }`}
+                onClick={() => setTab(s.id as typeof tab)}
+                className={cn(
+                  "focus-ring flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:w-full",
+                  active
+                    ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
               >
-                <p className={`font-medium text-sm ${settings.aiObjective === opt.value ? "text-primary" : "text-foreground"}`}>
-                  {opt.title}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{opt.description}</p>
+                <Icon className="size-4" /> {s.label}
               </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            );
+          })}
+        </nav>
 
-      {/* Personalidade da IA */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
-            Personalidade da IA
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Nome da atendente virtual</Label>
-            <Input value={settings.aiName} onChange={(e) => update("aiName", e.target.value)} placeholder="Ex: Ana, Sofia, Maria..." />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tipo de negócio — templates de prompt</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTemplate(t.label);
-                    update("systemPrompt", t.prompts[settings.aiObjective]);
-                  }}
-                  className={`flex items-center gap-2 p-3 rounded-lg border-2 text-left text-sm transition-all ${
-                    selectedTemplate === t.label
-                      ? "border-primary bg-[var(--aqua-glow)]"
-                      : "border-border hover:border-[var(--border-m)] hover:bg-secondary"
-                  }`}
-                >
-                  <t.icon className={`h-4 w-4 shrink-0 ${selectedTemplate === t.label ? "text-primary" : "text-muted-foreground"}`} />
-                  <span className={selectedTemplate === t.label ? "text-primary" : "text-foreground"}>{t.label}</span>
-                </button>
-              ))}
+        <div className="min-w-0 max-w-4xl">
+        {/* NEGÓCIO */}
+        {tab === "negocio" && (
+        <div className="space-y-6">
+          <SectionCard icon={Building2} title="Dados do negócio" description="Informações básicas usadas pela IA e nas notificações.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nome do negócio" htmlFor="name">
+                <Input id="name" value={settings.name} onChange={(e) => update("name", e.target.value)} />
+              </Field>
+              <Field label="WhatsApp do negócio" htmlFor="phone">
+                <Input id="phone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.phone)} onChange={(e) => update("phone", localPhoneBR(e.target.value))} />
+              </Field>
             </div>
-          </div>
+            <Field label="WhatsApp do admin (notificações)" htmlFor="adminPhone" className="mt-4">
+              <Input id="adminPhone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", localPhoneBR(e.target.value))} />
+            </Field>
+          </SectionCard>
+        </div>
+        )}
 
-          <div className="space-y-1.5">
-            <Label>Prompt do sistema</Label>
+        {/* IA */}
+        {tab === "ia" && (
+        <div className="space-y-6">
+          <SectionCard icon={Target} title="Objetivo da IA" description="Define como a IA conduz o atendimento — o prompt e as ferramentas mudam conforme a opção.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                { value: "agendamento", title: "Agendamento", description: "A IA verifica disponibilidade e agenda consultas ou serviços direto pelo WhatsApp." },
+                { value: "triagem", title: "Triagem", description: "A IA coleta as informações do cliente e avisa que um profissional entrará em contato." },
+              ].map((opt) => {
+                const active = settings.aiObjective === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      const newObjective = opt.value as "agendamento" | "triagem";
+                      update("aiObjective", newObjective);
+                      if (selectedTemplate) {
+                        const tpl = TEMPLATES.find((t) => t.label === selectedTemplate);
+                        if (tpl) update("systemPrompt", tpl.prompts[newObjective]);
+                      }
+                    }}
+                    className={cn(
+                      "rounded-xl border p-4 text-left transition-all",
+                      active
+                        ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] ring-1 ring-[var(--accent-strong)]"
+                        : "border-border hover:border-[var(--border-m)]"
+                    )}
+                  >
+                    <p className={cn("text-sm font-medium", active ? "text-[var(--accent-strong)]" : "text-foreground")}>
+                      {opt.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{opt.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard icon={Bot} title="Personalidade da IA" description="Nome, modelo de prompt e instruções de comportamento.">
+            <Field label="Nome da atendente virtual" htmlFor="aiName">
+              <Input id="aiName" value={settings.aiName} onChange={(e) => update("aiName", e.target.value)} placeholder="Ex: Ana, Sofia, Maria..." />
+            </Field>
+
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Tipo de negócio — modelos de prompt</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TEMPLATES.map((t) => {
+                  const active = selectedTemplate === t.label;
+                  const Icon = t.icon;
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemplate(t.label);
+                        update("systemPrompt", t.prompts[settings.aiObjective]);
+                      }}
+                      className={cn(
+                        "flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-all",
+                        active
+                          ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                          : "border-border text-foreground hover:border-[var(--border-m)] hover:bg-muted"
+                      )}
+                    >
+                      <Icon className={cn("size-4 shrink-0", active ? "text-[var(--accent-strong)]" : "text-muted-foreground")} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Field label="Prompt do sistema" htmlFor="systemPrompt" className="mt-4">
+              <Textarea
+                id="systemPrompt"
+                rows={9}
+                value={settings.systemPrompt}
+                onChange={(e) => update("systemPrompt", e.target.value)}
+                placeholder="Descreva como a IA deve se comportar, tom de voz, limitações, etc."
+                className="resize-none font-mono text-xs leading-relaxed"
+              />
+            </Field>
+          </SectionCard>
+
+          <SectionCard icon={Info} title="Informações para a IA" description="Tudo que a IA precisa saber: endereço, como funcionam as reuniões, dúvidas frequentes, diferenciais.">
             <Textarea
               rows={8}
-              value={settings.systemPrompt}
-              onChange={(e) => update("systemPrompt", e.target.value)}
-              placeholder="Descreva como a IA deve se comportar, tom de voz, limitações, etc."
-              className="resize-none font-mono text-xs"
+              value={settings.companyInfo}
+              onChange={(e) => update("companyInfo", e.target.value)}
+              placeholder={`Exemplos:\n- Endereço: Rua das Flores, 123 — Sala 45, Centro, São Paulo/SP\n- As consultas são presenciais e por videochamada (Google Meet)\n- Estacionamento gratuito no local\n- Atendemos os planos X e Y`}
+              className="resize-none text-sm leading-relaxed"
             />
-          </div>
-        </CardContent>
-      </Card>
+          </SectionCard>
+        </div>
+        )}
 
-      {/* Informações para a IA */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Informações para a IA</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Tudo que a IA precisa saber para responder os clientes: endereço, como funcionam as reuniões, dúvidas frequentes, diferenciais, etc.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            rows={8}
-            value={settings.companyInfo}
-            onChange={(e) => update("companyInfo", e.target.value)}
-            placeholder={`Exemplos:\n- Endereço: Rua das Flores, 123 — Sala 45, Centro, São Paulo/SP\n- As consultas são realizadas presencialmente e por videochamada (Google Meet)\n- Estacionamento gratuito no local\n- Dúvida frequente: sim, atendemos pelo plano X e Y\n- Dúvida frequente: o primeiro atendimento tem duração de 1 hora`}
-            className="resize-none text-sm"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Documentos */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            {settings.aiObjective === "triagem" ? "Informações/documentos para triagem" : "Documentos necessários"}
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {settings.aiObjective === "triagem"
-              ? "A IA vai solicitar esses itens durante a conversa antes de concluir a triagem."
-              : "A IA vai solicitar esses documentos pelo WhatsApp antes de confirmar o agendamento."}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2 min-h-[36px]">
-            {settings.requiredDocs.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum documento cadastrado.</p>
-            )}
-            {settings.requiredDocs.map((doc, i) => (
-              <Badge key={i} variant="secondary" className="gap-1.5 pr-1.5 text-sm bg-secondary text-foreground border-border">
-                {doc}
-                <button type="button" onClick={() => removeDoc(i)} className="hover:text-destructive transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Ex: RG, CPF, Comprovante de residência..."
-              value={newDoc}
-              onChange={(e) => setNewDoc(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addDoc()}
-            />
-            <Button type="button" variant="outline" size="icon" onClick={addDoc}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Horários */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
-            Horários de atendimento
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Duração padrão do agendamento (minutos)</Label>
-            <Input
-              type="number"
-              min={15}
-              step={15}
-              className="w-32"
-              value={settings.appointmentDuration}
-              onChange={(e) => update("appointmentDuration", Number(e.target.value))}
-            />
-          </div>
-
-          <div className="space-y-3 pt-1">
-            {DAYS.map(({ key, label }) => {
-              const day = settings.workingHours[key] ?? { start: "08:00", end: "18:00", enabled: false };
-              return (
-                <div key={key} className="space-y-1.5">
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      checked={day.enabled}
-                      onCheckedChange={() => toggleDay(key)}
-                      id={`day-${key}`}
-                    />
-                    <label
-                      htmlFor={`day-${key}`}
-                      className={`w-20 text-sm font-medium cursor-pointer select-none ${
-                        day.enabled ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {label}
-                    </label>
-                    {day.enabled ? (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="time"
-                            className="w-28 h-8 text-sm"
-                            value={day.start}
-                            onChange={(e) => setHour(key, "start", e.target.value)}
-                          />
-                          <span className="text-muted-foreground text-sm">até</span>
-                          <Input
-                            type="time"
-                            className="w-28 h-8 text-sm"
-                            value={day.end}
-                            onChange={(e) => setHour(key, "end", e.target.value)}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleLunch(key)}
-                          className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-                            day.lunchStart
-                              ? "border-orange-400/40 text-orange-400 bg-orange-400/10 hover:bg-orange-400/15"
-                              : "border-dashed border-border text-muted-foreground hover:border-[var(--border-m)] hover:text-foreground"
-                          }`}
-                        >
-                          {day.lunchStart ? "intervalo" : "+ intervalo"}
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Fechado</span>
-                    )}
-                  </div>
-                  {day.enabled && day.lunchStart && (
-                    <div className="flex items-center gap-2 ml-[7rem]">
-                      <span className="text-xs text-orange-400 w-14">intervalo</span>
-                      <Input
-                        type="time"
-                        className="w-28 h-7 text-sm"
-                        value={day.lunchStart}
-                        onChange={(e) => setHour(key, "lunchStart", e.target.value)}
-                      />
-                      <span className="text-muted-foreground text-sm">até</span>
-                      <Input
-                        type="time"
-                        className="w-28 h-7 text-sm"
-                        value={day.lunchEnd ?? "13:00"}
-                        onChange={(e) => setHour(key, "lunchEnd", e.target.value)}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lembrete automático */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Bell className="h-4 w-4 text-primary" />
-            Lembrete automático
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Quando ativado, a IA envia uma mensagem de lembrete ao cliente 24 horas antes do agendamento.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Enviar lembrete 24h antes</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {settings.reminderEnabled ? "Lembretes ativados" : "Lembretes desativados"}
-              </p>
+        {/* DOCUMENTOS */}
+        {tab === "docs" && (
+        <div className="space-y-6">
+          <SectionCard
+            icon={FileText}
+            title={docsLabel}
+            description={
+              settings.aiObjective === "triagem"
+                ? "A IA vai solicitar esses itens durante a conversa antes de concluir a triagem."
+                : "A IA vai solicitar esses documentos antes de confirmar o agendamento."
+            }
+          >
+            <div className="flex min-h-9 flex-wrap gap-2">
+              {settings.requiredDocs.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
+              )}
+              {settings.requiredDocs.map((doc, i) => (
+                <Badge key={i} variant="secondary" className="gap-1.5 pr-1.5 text-sm">
+                  {doc}
+                  <button type="button" onClick={() => removeDoc(i)} className="transition-colors hover:text-destructive" aria-label={`Remover ${doc}`}>
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
             </div>
-            <Switch
-              checked={settings.reminderEnabled}
-              onCheckedChange={(v) => update("reminderEnabled", v)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Google Calendar */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            {settings.googleRefreshToken
-              ? <CalendarCheck className="h-4 w-4 text-primary" />
-              : <CalendarX className="h-4 w-4 text-muted-foreground" />}
-            Google Calendar
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Conecte sua conta Google para que os agendamentos apareçam automaticamente no seu calendário.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            {settings.googleRefreshToken
-              ? <span className="text-sm text-primary font-medium">Conta Google conectada</span>
-              : <span className="text-sm text-muted-foreground">Nenhuma conta conectada</span>}
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={connectGoogle}>
-              <CalendarCheck className="h-3.5 w-3.5" />
-              {settings.googleRefreshToken ? "Reconectar conta Google" : "Conectar conta Google"}
-            </Button>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>ID da Agenda</Label>
-            <p className="text-xs text-muted-foreground">
-              Crie uma agenda no Google Calendar, acesse as configurações dela e copie o <strong>ID da agenda</strong> (ex: nome@group.calendar.google.com). Use <code className="text-xs bg-secondary px-1 rounded">primary</code> para a agenda principal.
-            </p>
-            <div className="flex gap-2">
+            <div className="mt-3 flex gap-2">
               <Input
-                className="text-sm"
-                placeholder="nome@group.calendar.google.com"
-                value={calendarIdInput}
-                onChange={(e) => setCalendarIdInput(e.target.value)}
+                placeholder="Ex: RG, CPF, Comprovante de residência..."
+                value={newDoc}
+                onChange={(e) => setNewDoc(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addDoc())}
               />
-              <Button
-                size="sm"
-                onClick={saveCalendarId}
-                disabled={savingCalendar}
-                className="shrink-0"
-              >
-                Salvar
+              <Button type="button" variant="outline" size="icon" onClick={addDoc} aria-label="Adicionar">
+                <Plus className="size-4" />
               </Button>
             </div>
-            {settings.calendarId && (
-              <p className="text-xs text-muted-foreground">Atual: {settings.calendarId}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </SectionCard>
+        </div>
+        )}
 
-      <div className="flex justify-end pb-4">
-        <Button
-          onClick={save}
-          disabled={saving}
-          className="bg-[var(--cta)] hover:bg-[var(--cta-h)] text-[var(--bg-0)] font-semibold gap-2 min-w-[160px] shadow-[0_0_24px_var(--cta-glow)]"
-        >
-          <Save className="h-4 w-4" />
+        {/* HORÁRIOS */}
+        {tab === "horarios" && (
+        <div className="space-y-6">
+          <SectionCard icon={Clock} title="Horários de atendimento" description="Defina os dias e horários em que a IA pode agendar.">
+            <Field label="Duração padrão do agendamento (minutos)" htmlFor="duration">
+              <Input
+                id="duration"
+                type="number"
+                min={15}
+                step={15}
+                className="w-32"
+                value={settings.appointmentDuration}
+                onChange={(e) => update("appointmentDuration", Number(e.target.value))}
+              />
+            </Field>
+
+            <div className="mt-5 space-y-2.5">
+              {DAYS.map(({ key, label }) => {
+                const day = settings.workingHours[key] ?? { start: "08:00", end: "18:00", enabled: false };
+                return (
+                  <div key={key} className="rounded-xl border border-border p-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Switch checked={day.enabled} onCheckedChange={() => toggleDay(key)} id={`day-${key}`} />
+                      <label
+                        htmlFor={`day-${key}`}
+                        className={cn("w-20 cursor-pointer select-none text-sm font-medium", day.enabled ? "text-foreground" : "text-muted-foreground")}
+                      >
+                        {label}
+                      </label>
+                      {day.enabled ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <Input type="time" className="h-9 w-28 text-sm" value={day.start} onChange={(e) => setHour(key, "start", e.target.value)} />
+                            <span className="text-sm text-muted-foreground">até</span>
+                            <Input type="time" className="h-9 w-28 text-sm" value={day.end} onChange={(e) => setHour(key, "end", e.target.value)} />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleLunch(key)}
+                            className={cn(
+                              "rounded-md border px-2 py-1 text-xs transition-colors",
+                              day.lunchStart
+                                ? "border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[var(--warning-soft)] text-[var(--warning)]"
+                                : "border-dashed border-border text-muted-foreground hover:border-[var(--border-m)] hover:text-foreground"
+                            )}
+                          >
+                            {day.lunchStart ? "intervalo" : "+ intervalo"}
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Fechado</span>
+                      )}
+                    </div>
+                    {day.enabled && day.lunchStart && (
+                      <div className="mt-2.5 flex items-center gap-2 pl-[3.25rem]">
+                        <span className="w-14 text-xs text-[var(--warning)]">intervalo</span>
+                        <Input type="time" className="h-8 w-28 text-sm" value={day.lunchStart} onChange={(e) => setHour(key, "lunchStart", e.target.value)} />
+                        <span className="text-sm text-muted-foreground">até</span>
+                        <Input type="time" className="h-8 w-28 text-sm" value={day.lunchEnd ?? "13:00"} onChange={(e) => setHour(key, "lunchEnd", e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        </div>
+        )}
+
+        {/* INTEGRAÇÕES */}
+        {tab === "integracoes" && (
+        <div className="space-y-6">
+          <SectionCard icon={Bell} title="Lembrete automático" description="Envia uma mensagem ao cliente 24 horas antes do agendamento.">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Enviar lembrete 24h antes</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {settings.reminderEnabled ? "Lembretes ativados" : "Lembretes desativados"}
+                </p>
+              </div>
+              <Switch checked={settings.reminderEnabled} onCheckedChange={(v) => update("reminderEnabled", v)} />
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            icon={settings.googleRefreshToken ? CalendarCheck : CalendarX}
+            title="Google Calendar"
+            description="Conecte sua conta Google para que os agendamentos apareçam no seu calendário."
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              {settings.googleRefreshToken ? (
+                <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent-strong)]">
+                  <Check className="size-4" /> Conta Google conectada
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Nenhuma conta conectada</span>
+              )}
+              <Button variant="outline" size="sm" onClick={connectGoogle}>
+                <CalendarCheck className="size-3.5" />
+                {settings.googleRefreshToken ? "Reconectar" : "Conectar conta Google"}
+              </Button>
+            </div>
+
+            <Field label="ID da agenda" htmlFor="calendarId" className="mt-4" hint="Crie uma agenda no Google Calendar e copie o ID dela (ex: nome@group.calendar.google.com). Use “primary” para a agenda principal.">
+              <div className="flex gap-2">
+                <Input
+                  id="calendarId"
+                  className="font-mono text-sm"
+                  placeholder="nome@group.calendar.google.com"
+                  value={calendarIdInput}
+                  onChange={(e) => setCalendarIdInput(e.target.value)}
+                />
+                <Button size="default" onClick={saveCalendarId} disabled={savingCalendar} className="shrink-0">
+                  Salvar
+                </Button>
+              </div>
+            </Field>
+            {settings.calendarId && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Atual: <span className="font-mono">{settings.calendarId}</span>
+              </p>
+            )}
+          </SectionCard>
+        </div>
+        )}
+        </div>
+      </div>
+
+      {/* Sticky save bar */}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-end gap-3 border-t border-border bg-background/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        {saved && <span className="text-sm text-[var(--accent-strong)]">Alterações salvas</span>}
+        <Button onClick={save} disabled={saving} className="min-w-[160px]">
+          <Save className="size-4" />
           {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar configurações"}
         </Button>
       </div>

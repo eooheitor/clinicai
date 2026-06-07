@@ -25,6 +25,8 @@ router.get("/dashboard", async (req, res) => {
     const cId = clinicId(req);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
 
     const [
       totalConversations,
@@ -40,7 +42,7 @@ router.get("/dashboard", async (req, res) => {
       prisma.conversation.count({ where: { clinicId: cId, humanMode: true } }),
       prisma.conversation.count({ where: { clinicId: cId, triagemCompleta: true } }),
       prisma.appointment.count({
-        where: { clinicId: cId, scheduledAt: { gte: today }, status: "CONFIRMED" },
+        where: { clinicId: cId, scheduledAt: { gte: today, lt: tomorrow }, status: "CONFIRMED" },
       }),
       prisma.appointment.count({
         where: {
@@ -64,6 +66,16 @@ router.get("/dashboard", async (req, res) => {
       ORDER BY day ASC
     `;
 
+    // Serviços mais agendados (CONFIRMED)
+    const topServicesRaw = await prisma.appointment.groupBy({
+      by: ["service"],
+      where: { clinicId: cId, status: "CONFIRMED" },
+      _count: { service: true },
+      orderBy: { _count: { service: "desc" } },
+      take: 5,
+    });
+    const topServices = topServicesRaw.map((r) => ({ service: r.service, count: r._count.service }));
+
     res.json({
       totalConversations,
       activeToday,
@@ -72,6 +84,7 @@ router.get("/dashboard", async (req, res) => {
       appointmentsToday,
       appointmentsWeek,
       totalPatients,
+      topServices,
       messagesLast7Days: last7.map((r) => ({ day: r.day, count: Number(r.count) })),
     });
   } catch (err: any) {
@@ -278,15 +291,24 @@ router.get("/patients", async (req, res) => {
 
 router.get("/appointments", async (req, res) => {
   try {
-    const { status, page = "1" } = req.query;
-    const take = 20;
-    const skip = (Number(page) - 1) * take;
+    const { status, page = "1", from, to, phone } = req.query;
 
-    const where: any = {
-      clinicId: clinicId(req),
-      scheduledAt: { gte: new Date() },
-    };
+    const where: any = { clinicId: clinicId(req) };
     if (status) where.status = String(status).toUpperCase();
+    if (phone) where.patientPhone = String(phone);
+    if (from || to) {
+      where.scheduledAt = {};
+      if (from) where.scheduledAt.gte = new Date(String(from));
+      if (to) where.scheduledAt.lt = new Date(String(to));
+    } else if (!phone) {
+      // Comportamento padrão (retrocompatível): apenas futuros
+      where.scheduledAt = { gte: new Date() };
+    }
+
+    // Em consultas por intervalo/telefone retornamos tudo; senão paginamos
+    const ranged = Boolean(from || to || phone);
+    const take = ranged ? 1000 : 20;
+    const skip = ranged ? 0 : (Number(page) - 1) * take;
 
     const [appointments, total] = await Promise.all([
       prisma.appointment.findMany({
@@ -299,6 +321,57 @@ router.get("/appointments", async (req, res) => {
     ]);
 
     res.json({ appointments, total, pages: Math.ceil(total / take) });
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// Criação manual de agendamento (painel)
+router.post("/appointments", async (req, res) => {
+  try {
+    const cId = clinicId(req);
+    const { patientName, patientPhone, service, scheduledAt, durationMinutes, notes } = req.body;
+    if (!patientName || !service || !scheduledAt) {
+      res.status(400).json({ error: "Nome, serviço e data/hora são obrigatórios" });
+      return;
+    }
+    const start = new Date(scheduledAt);
+    if (isNaN(start.getTime())) {
+      res.status(400).json({ error: "Data/hora inválida" });
+      return;
+    }
+    const clinic = await prisma.clinic.findUnique({ where: { id: cId } });
+    if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
+
+    const duration = Number(durationMinutes) || clinic.appointmentDuration || 60;
+    const end = new Date(start.getTime() + duration * 60_000);
+    const phone = patientPhone ? String(patientPhone).replace(/\D/g, "") : "";
+
+    let event: Awaited<ReturnType<typeof calendarService.createAppointment>> = null;
+    try {
+      event = await calendarService.createAppointment(clinic, {
+        patientName: String(patientName),
+        patientPhone: phone,
+        service: String(service),
+        start: start.toISOString(),
+        end: end.toISOString(),
+        notes: notes ? String(notes) : undefined,
+      });
+    } catch (err: any) {
+      console.warn(`⚠️  Agendamento manual salvo sem evento no Calendar: ${err?.message}`);
+    }
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        clinicId: cId,
+        patientName: String(patientName),
+        patientPhone: phone,
+        service: String(service),
+        notes: notes ? String(notes) : null,
+        scheduledAt: start,
+        endsAt: end,
+        googleEventId: event?.id ?? undefined,
+      },
+    });
+    res.status(201).json(appointment);
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 

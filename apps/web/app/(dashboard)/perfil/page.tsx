@@ -2,14 +2,29 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { getUser } from "@/lib/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getUser, type AuthUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
+import { Field } from "@/components/field";
+import { StatusPill } from "@/components/status-pill";
+import { Reveal } from "@/components/motion";
+import { getInitials } from "@/lib/utils";
+import { UserRound, KeyRound, Building2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+const wrap = "px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
+
+const planLabel: Record<string, { tone: "accent" | "warning" | "destructive"; label: string }> = {
+  TRIAL: { tone: "warning", label: "Período de teste" },
+  ACTIVE: { tone: "accent", label: "Assinatura ativa" },
+  SUSPENDED: { tone: "destructive", label: "Suspenso" },
+  CANCELLED: { tone: "destructive", label: "Cancelado" },
+};
+
 export default function PerfilPage() {
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -20,11 +35,18 @@ export default function PerfilPage() {
 
   useEffect(() => {
     const u = getUser();
-    if (u) { setName(u.name); setEmail(u.email); }
+    if (u) {
+      setUser(u);
+      setName(u.name);
+      setEmail(u.email);
+    }
   }, []);
 
   async function saveInfo() {
-    if (!name || !email) { toast.error("Nome e email são obrigatórios"); return; }
+    if (!name || !email) {
+      toast.error("Nome e email são obrigatórios");
+      return;
+    }
     setSavingInfo(true);
     try {
       await api.patch("/auth/me", { name, email });
@@ -63,58 +85,63 @@ export default function PerfilPage() {
     }
   }
 
+  const plan = user?.clinic ? planLabel[user.clinic.subscriptionStatus] : null;
+
   return (
-    <div className="p-8 max-w-xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Meu perfil</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Atualize suas informações de acesso</p>
+    <div className={`${wrap} space-y-6`}>
+      <PageHeader title="Meu perfil" subtitle="Atualize suas informações de acesso" />
+
+      {/* Hero */}
+      <Reveal>
+        <div className="bg-aurora surface relative overflow-hidden rounded-3xl p-6 sm:p-8">
+          <div className="bg-grid pointer-events-none absolute inset-0 opacity-30" />
+          <div className="relative flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+            <span className="bg-brand flex size-20 items-center justify-center rounded-full font-display text-2xl font-semibold text-white shadow-[0_8px_30px_var(--accent-glow)]">
+              {getInitials(user?.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-2xl font-semibold text-foreground">{user?.name ?? "—"}</h2>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <StatusPill tone="accent" dot={false}>
+                  <ShieldCheck className="size-3" /> {user?.role === "MASTER" ? "Administrador" : "Conta da clínica"}
+                </StatusPill>
+                {user?.clinic && (
+                  <StatusPill tone="muted" dot={false}>
+                    <Building2 className="size-3" /> {user.clinic.name}
+                  </StatusPill>
+                )}
+                {plan && <StatusPill tone={plan.tone}>{plan.label}</StatusPill>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Reveal>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SectionCard
+          icon={UserRound}
+          title="Informações pessoais"
+          footer={<Button onClick={saveInfo} disabled={savingInfo}>{savingInfo ? "Salvando..." : "Salvar"}</Button>}
+        >
+          <div className="space-y-4">
+            <Field label="Nome" htmlFor="name"><Input id="name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="E-mail" htmlFor="email"><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          icon={KeyRound}
+          title="Alterar senha"
+          footer={<Button onClick={savePassword} disabled={savingPassword}>{savingPassword ? "Salvando..." : "Alterar senha"}</Button>}
+        >
+          <div className="space-y-4">
+            <Field label="Senha atual" htmlFor="currentPassword"><Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" /></Field>
+            <Field label="Nova senha" htmlFor="newPassword"><Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" /></Field>
+            <Field label="Confirmar nova senha" htmlFor="confirmPassword"><Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" /></Field>
+          </div>
+        </SectionCard>
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Informações pessoais</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={saveInfo} disabled={savingInfo}>
-              {savingInfo ? "Salvando..." : "Salvar"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Alterar senha</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Senha atual</Label>
-            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Nova senha</Label>
-            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Confirmar nova senha</Label>
-            <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={savePassword} disabled={savingPassword}>
-              {savingPassword ? "Salvando..." : "Alterar senha"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
