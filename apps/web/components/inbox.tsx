@@ -10,7 +10,7 @@ import { StatusPill } from "@/components/status-pill";
 import { ListSkeleton } from "@/components/skeletons";
 import { EmptyState } from "@/components/empty-state";
 import { Search, MessageSquare, MessagesSquare } from "lucide-react";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getInitials, maskPhoneBR } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -135,7 +135,7 @@ export function Inbox({ initialId }: { initialId?: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {c.contactName || c.contactPhone}
+                      {c.contactName || maskPhoneBR(c.contactPhone)}
                     </p>
                     <span className="shrink-0 text-[0.7rem] text-muted-foreground">
                       {formatDistanceToNow(new Date(c.updatedAt), { locale: ptBR, addSuffix: false })}

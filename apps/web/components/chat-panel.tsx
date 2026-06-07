@@ -9,7 +9,7 @@ import { ArrowLeft, Bot, User, RefreshCw, Send, BotOff, Sparkles } from "lucide-
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion } from "motion/react";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getInitials, maskPhoneBR } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface Message { id: string; role: string; content: string; createdAt: string; }
@@ -94,11 +94,11 @@ export function ChatPanel({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate font-medium text-foreground">{conv.contactName || conv.contactPhone}</p>
+            <p className="truncate font-medium text-foreground">{conv.contactName || maskPhoneBR(conv.contactPhone)}</p>
             {conv.triagemCompleta && <StatusPill tone="accent" dot={false}>Triagem</StatusPill>}
             {conv.humanMode && <StatusPill tone="warning" pulse>Humano</StatusPill>}
           </div>
-          <p className="truncate text-xs text-muted-foreground">{conv.contactPhone}</p>
+          <p className="truncate text-xs text-muted-foreground">{maskPhoneBR(conv.contactPhone)}</p>
         </div>
         {conv.humanMode ? (
           <Button size="sm" onClick={reativarIA}>

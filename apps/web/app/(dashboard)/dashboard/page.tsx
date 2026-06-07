@@ -10,7 +10,7 @@ import { StatGridSkeleton, CardSkeleton } from "@/components/skeletons";
 import { StatusPill } from "@/components/status-pill";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { useChartTheme } from "@/hooks/use-chart-theme";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getInitials, maskPhoneBR } from "@/lib/utils";
 import {
   MessageSquare, Calendar, Users, UserCog, ArrowRight, Clock, Sparkles, CalendarClock, PieChart as PieIcon,
 } from "lucide-react";
@@ -247,7 +247,7 @@ export default function DashboardPage() {
                   <button key={c.id} onClick={() => router.push(`/conversas/${c.id}`)} className="focus-ring flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-muted">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--warning-soft)] text-xs font-semibold text-[var(--warning)]">{getInitials(c.contactName || c.contactPhone)}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{c.contactName || c.contactPhone}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{c.contactName || maskPhoneBR(c.contactPhone)}</p>
                       <p className="truncate text-xs text-muted-foreground">{c.messages[0]?.content ?? "—"}</p>
                     </div>
                   </button>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
                     <button onClick={() => router.push(`/conversas/${c.id}`)} className="focus-ring flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted">
                       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent-strong)]">{getInitials(c.contactName || c.contactPhone)}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{c.contactName || c.contactPhone}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{c.contactName || maskPhoneBR(c.contactPhone)}</p>
                         <p className="truncate text-xs text-muted-foreground">{c.messages[0]?.content ?? "—"}</p>
                       </div>
                       <span className="shrink-0 text-[0.7rem] text-muted-foreground">{format(new Date(c.updatedAt), "HH:mm")}</span>

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getInitials, maskPhoneBR } from "@/lib/utils";
 
 interface Patient {
   id: string; contactPhone: string; contactName: string | null;
@@ -105,7 +105,7 @@ export default function ClientesPage() {
               >
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent-strong)]">{getInitials(p.contactName || p.contactPhone)}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{p.contactName || p.contactPhone}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{p.contactName || maskPhoneBR(p.contactPhone)}</p>
                   <p className="flex items-center gap-2 truncate text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><MessageSquare className="size-3" />{p._count.messages}</span>
                     {apptCount > 0 && <span className="inline-flex items-center gap-1 text-[var(--accent-strong)]"><CalendarDays className="size-3" />{apptCount}</span>}
@@ -132,7 +132,7 @@ export default function ClientesPage() {
           <span className="bg-brand flex size-20 items-center justify-center rounded-full font-display text-2xl font-semibold text-white shadow-[0_8px_30px_var(--accent-glow)]">{getInitials(selected.contactName || selected.contactPhone)}</span>
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-2xl font-semibold text-foreground">{selected.contactName || "Sem nome"}</h2>
-            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone className="size-3.5" />{selected.contactPhone}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone className="size-3.5" />{maskPhoneBR(selected.contactPhone)}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {conv?.triagemCompleta && <StatusPill tone="accent" dot={false}>Triagem concluída</StatusPill>}
               {conv?.humanMode && <StatusPill tone="warning" pulse>Aguardando humano</StatusPill>}

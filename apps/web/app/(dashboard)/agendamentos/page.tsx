@@ -278,7 +278,7 @@ export default function AgendamentosPage() {
                       </div>
                       <div className="mt-1 flex flex-col gap-0.5 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1"><Clock className="size-3.5" />{format(new Date(a.scheduledAt), "HH:mm")} – {format(new Date(a.endsAt), "HH:mm")}</span>
-                        <span className="flex items-center gap-1"><Phone className="size-3.5" />{a.patientPhone}</span>
+                        <span className="flex items-center gap-1"><Phone className="size-3.5" />{maskPhoneBR(a.patientPhone)}</span>
                       </div>
                     </div>
                   </button>
@@ -307,7 +307,7 @@ export default function AgendamentosPage() {
                     {format(new Date(detail.scheduledAt), "HH:mm")} – {format(new Date(detail.endsAt), "HH:mm")}
                   </span>
                 </div>
-                <p className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4" />{detail.patientPhone}</p>
+                <p className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4" />{maskPhoneBR(detail.patientPhone)}</p>
                 {detail.notes && <p className="rounded-lg bg-muted px-3 py-2 text-muted-foreground">{detail.notes}</p>}
               </div>
               <DialogFooter>
