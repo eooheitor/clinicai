@@ -11,9 +11,10 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { Field } from "@/components/field";
+import { KnowledgeDocs, type KnowledgeDoc } from "@/components/knowledge-docs";
 import { cn, maskPhoneBR, localPhoneBR, toStoredPhoneBR } from "@/lib/utils";
 import {
-  Bot, Clock, Plus, X, Save, Stethoscope, Scale, ShoppingBag, Wrench, Target,
+  Bot, Clock, Plus, X, Save, Target, Sparkles,
   CalendarCheck, CalendarX, Bell, Building2, FileText, Info, Check, Plug,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,7 +34,7 @@ interface WorkingHours {
 interface Settings {
   name: string;
   aiName: string;
-  systemPrompt: string;
+  clientInstructions: string;
   companyInfo: string;
   services: string[];
   requiredDocs: string[];
@@ -45,6 +46,7 @@ interface Settings {
   calendarId: string | null;
   googleRefreshToken: string | null;
   reminderEnabled: boolean;
+  preset: { id: string; name: string; description: string | null } | null;
 }
 
 const DAYS = [
@@ -61,85 +63,10 @@ const DEFAULT_HOURS: WorkingHours = Object.fromEntries(
   DAYS.map(({ key }, i) => [key, { start: "08:00", end: "18:00", enabled: i < 5 }])
 );
 
-const TEMPLATES = [
-  {
-    icon: Stethoscope,
-    label: "Clínica / Saúde",
-    prompts: {
-      agendamento: `Você é uma atendente virtual de uma clínica. Seu papel é recepcionar pacientes com simpatia, tirar dúvidas sobre os serviços disponíveis e agendar consultas ou procedimentos conforme a disponibilidade da agenda.
-
-Responda sempre de forma clara, objetiva e acolhedora. Nunca invente informações sobre procedimentos ou valores. Se não souber algo, informe que irá verificar com a equipe.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os serviços com uma breve descrição de cada um]`,
-      triagem: `Você é uma atendente virtual de uma clínica. Seu papel é recepcionar pacientes com simpatia, coletar as informações necessárias e encaminhar o caso para o profissional responsável.
-
-Responda sempre de forma clara, objetiva e acolhedora. Nunca invente informações sobre procedimentos ou valores. Se não souber algo, informe que irá verificar com a equipe.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os serviços com uma breve descrição de cada um]`,
-    },
-  },
-  {
-    icon: Scale,
-    label: "Escritório Jurídico",
-    prompts: {
-      agendamento: `Você é uma recepcionista virtual de um escritório de advocacia. Receba os clientes com profissionalismo, colete informações iniciais sobre o caso e agende consultas com os advogados disponíveis.
-
-Seja formal e preciso. Não ofereça orientação jurídica — apenas agende e informe sobre os serviços do escritório.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui as áreas de atuação com uma breve descrição de cada uma]`,
-      triagem: `Você é uma recepcionista virtual de um escritório de advocacia. Receba os clientes com profissionalismo e colete as informações iniciais sobre o caso para que um advogado possa analisar e entrar em contato.
-
-Seja formal e preciso. Não ofereça orientação jurídica — apenas colete informações e informe sobre os serviços do escritório.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui as áreas de atuação com uma breve descrição de cada uma]`,
-    },
-  },
-  {
-    icon: ShoppingBag,
-    label: "Comércio / Loja",
-    prompts: {
-      agendamento: `Você é uma atendente virtual de uma loja. Auxilie os clientes com informações sobre produtos, preços e disponibilidade, e agende atendimentos presenciais quando necessário.
-
-Seja simpático e prestativo. Sempre que não souber o estoque ou valor exato, oriente o cliente a aguardar confirmação da equipe.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os produtos ou serviços com uma breve descrição de cada um]`,
-      triagem: `Você é uma atendente virtual de uma loja. Auxilie os clientes com informações sobre produtos e colete os dados necessários para que a equipe entre em contato e dê sequência ao atendimento.
-
-Seja simpático e prestativo. Sempre que não souber o estoque ou valor exato, oriente o cliente a aguardar confirmação da equipe.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os produtos ou serviços com uma breve descrição de cada um]`,
-    },
-  },
-  {
-    icon: Wrench,
-    label: "Serviços / Técnico",
-    prompts: {
-      agendamento: `Você é uma atendente virtual de uma empresa de serviços técnicos. Receba solicitações, colete informações sobre o problema do cliente e agende visitas ou atendimentos com os técnicos disponíveis.
-
-Seja claro e organizado. Solicite endereço e detalhes do problema para facilitar o atendimento.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os serviços técnicos com uma breve descrição de cada um]`,
-      triagem: `Você é uma atendente virtual de uma empresa de serviços técnicos. Receba solicitações, colete informações sobre o problema do cliente e registre o caso para que um técnico entre em contato.
-
-Seja claro e organizado. Solicite endereço e detalhes do problema para facilitar a análise.
-
-SERVIÇOS OFERECIDOS:
-[Liste aqui os serviços técnicos com uma breve descrição de cada um]`,
-    },
-  },
-];
-
 const wrap = "px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8";
 
 function snapshot(s: Settings) {
-  const { calendarId, googleRefreshToken, ...tracked } = s;
+  const { calendarId, googleRefreshToken, preset, ...tracked } = s;
   return JSON.stringify(tracked);
 }
 
@@ -187,7 +114,7 @@ export default function ConfiguracaoPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [baseline, setBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDoc[]>([]);
   const [newDoc, setNewDoc] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [calendarIdInput, setCalendarIdInput] = useState("");
@@ -202,7 +129,7 @@ export default function ConfiguracaoPage() {
         ...data,
         name: data.name ?? "",
         aiName: data.aiName ?? "",
-        systemPrompt: data.systemPrompt ?? "",
+        clientInstructions: data.clientInstructions ?? "",
         phone: localPhoneBR(data.phone),
         adminPhone: localPhoneBR(data.adminPhone),
         services: Array.isArray(data.services) ? data.services : [],
@@ -214,6 +141,7 @@ export default function ConfiguracaoPage() {
         calendarId: data.calendarId ?? null,
         googleRefreshToken: data.googleRefreshToken ?? null,
         reminderEnabled: data.reminderEnabled ?? true,
+        preset: data.preset ?? null,
       };
       setSettings(next);
       setBaseline(snapshot(next));
@@ -223,6 +151,7 @@ export default function ConfiguracaoPage() {
 
   useEffect(() => {
     loadSettings().catch((e) => setError(e.message));
+    api.get<KnowledgeDoc[]>("/panel/documents").then(setKnowledgeDocs).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -416,14 +345,7 @@ export default function ConfiguracaoPage() {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => {
-                      const newObjective = opt.value as "agendamento" | "triagem";
-                      update("aiObjective", newObjective);
-                      if (selectedTemplate) {
-                        const tpl = TEMPLATES.find((t) => t.label === selectedTemplate);
-                        if (tpl) update("systemPrompt", tpl.prompts[newObjective]);
-                      }
-                    }}
+                    onClick={() => update("aiObjective", opt.value as "agendamento" | "triagem")}
                     className={cn(
                       "rounded-xl border p-4 text-left transition-all",
                       active
@@ -441,50 +363,61 @@ export default function ConfiguracaoPage() {
             </div>
           </SectionCard>
 
-          <SectionCard icon={Bot} title="Personalidade da IA" description="Nome, modelo de prompt e instruções de comportamento.">
+          <SectionCard icon={Bot} title="Personalidade da IA" description="Nome da atendente e instruções complementares de comportamento.">
             <Field label="Nome da atendente virtual" htmlFor="aiName">
               <Input id="aiName" value={settings.aiName} onChange={(e) => update("aiName", e.target.value)} placeholder="Ex: Ana, Sofia, Maria..." />
             </Field>
 
-            <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Tipo de negócio — modelos de prompt</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {TEMPLATES.map((t) => {
-                  const active = selectedTemplate === t.label;
-                  const Icon = t.icon;
-                  return (
-                    <button
-                      key={t.label}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTemplate(t.label);
-                        update("systemPrompt", t.prompts[settings.aiObjective]);
-                      }}
-                      className={cn(
-                        "flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-all",
-                        active
-                          ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-                          : "border-border text-foreground hover:border-[var(--border-m)] hover:bg-muted"
-                      )}
-                    >
-                      <Icon className={cn("size-4 shrink-0", active ? "text-[var(--accent-strong)]" : "text-muted-foreground")} />
-                      {t.label}
-                    </button>
-                  );
-                })}
+            {settings.preset && (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-border bg-[var(--accent-soft)] px-4 py-3">
+                <Sparkles className="mt-0.5 size-4 shrink-0 text-[var(--accent-strong)]" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Preset ativo: <span className="text-[var(--accent-strong)]">{settings.preset.name}</span>
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    O comportamento principal da IA é gerenciado pela nossa equipe. Suas instruções abaixo complementam esse comportamento.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
-            <Field label="Prompt do sistema" htmlFor="systemPrompt" className="mt-4">
+            <Field
+              label="Instruções complementares"
+              htmlFor="clientInstructions"
+              className="mt-4"
+              hint={
+                settings.preset
+                  ? "Detalhes e preferências da sua clínica. Elas não substituem as regras principais definidas pela equipe."
+                  : "Descreva como a IA deve se comportar, tom de voz, limitações, etc."
+              }
+            >
               <Textarea
-                id="systemPrompt"
-                rows={9}
-                value={settings.systemPrompt}
-                onChange={(e) => update("systemPrompt", e.target.value)}
-                placeholder="Descreva como a IA deve se comportar, tom de voz, limitações, etc."
+                id="clientInstructions"
+                rows={7}
+                value={settings.clientInstructions}
+                onChange={(e) => update("clientInstructions", e.target.value)}
+                placeholder="Ex: trate os pacientes por 'você', mencione que aceitamos PIX, reforce o estacionamento gratuito..."
                 className="resize-none font-mono text-xs leading-relaxed"
               />
             </Field>
+          </SectionCard>
+
+          <SectionCard icon={FileText} title="Base de conhecimento" description="Anexe documentos (PDF, TXT ou Markdown) com informações que a IA deve usar nas respostas — tabelas de preços, perguntas frequentes, regras internas.">
+            <KnowledgeDocs
+              docs={knowledgeDocs}
+              limit={5}
+              onUpload={async (file) => {
+                const fd = new FormData();
+                fd.append("file", file);
+                const doc = await api.upload<KnowledgeDoc>("/panel/documents", fd);
+                setKnowledgeDocs((d) => [doc, ...d]);
+              }}
+              onDelete={async (doc) => {
+                await api.delete(`/panel/documents/${doc.id}`);
+                setKnowledgeDocs((d) => d.filter((x) => x.id !== doc.id));
+              }}
+            />
           </SectionCard>
 
           <SectionCard icon={Info} title="Informações para a IA" description="Tudo que a IA precisa saber: endereço, como funcionam as reuniões, dúvidas frequentes, diferenciais.">

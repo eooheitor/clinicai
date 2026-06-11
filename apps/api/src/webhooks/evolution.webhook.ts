@@ -139,6 +139,7 @@ export async function evolutionWebhookHandler(
   try {
     const clinic = await prisma.clinic.findUnique({
       where: { evolutionInstance: instanceName, active: true },
+      include: { preset: { include: { documents: true } }, documents: true },
     });
     if (!clinic) return;
 

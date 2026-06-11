@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, MessageSquare, Users, Calendar, Settings, Smartphone,
-  LogOut, BotMessageSquare, Building2, UserCircle, type LucideIcon,
+  LogOut, BotMessageSquare, Building2, UserCircle, Sparkles, type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn, getInitials } from "@/lib/utils";
@@ -23,6 +23,7 @@ export function navItemsFor(role: string | undefined, humanCount: number): NavIt
   if (role === "MASTER") {
     return [
       { href: "/master", icon: Building2, label: "Clientes", badge: 0 },
+      { href: "/master/presets", icon: Sparkles, label: "Presets de IA", badge: 0 },
       { href: "/usuarios", icon: UserCircle, label: "Usuários", badge: 0 },
     ];
   }
@@ -47,6 +48,9 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const items = navItemsFor(user.role, humanCount);
+  const activeHref = items
+    .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
@@ -68,7 +72,7 @@ export function AppSidebar({
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = item.href === activeHref;
           const Icon = item.icon;
           return (
             <Link

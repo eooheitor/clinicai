@@ -123,7 +123,6 @@ router.post("/register", async (req, res) => {
       name: clinicName,
       slug,
       evolutionInstance: slug,
-      systemPrompt: "Você é uma atendente virtual. Seja simpática e prestativa.",
       subscriptionStatus: "TRIAL",
       trialEndsAt,
     },
