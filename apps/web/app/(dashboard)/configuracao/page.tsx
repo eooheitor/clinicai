@@ -138,10 +138,55 @@ SERVIÇOS OFERECIDOS:
 
 const wrap = "px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8";
 
+function snapshot(s: Settings) {
+  const { calendarId, googleRefreshToken, ...tracked } = s;
+  return JSON.stringify(tracked);
+}
+
+interface TimeRangeProps {
+  label: string;
+  start: string;
+  end: string;
+  onStart: (val: string) => void;
+  onEnd: (val: string) => void;
+  accent?: boolean;
+  onRemove?: () => void;
+}
+
+function TimeRange({ label, start, end, onStart, onEnd, accent, onRemove }: TimeRangeProps) {
+  return (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+      <span
+        className={cn(
+          "text-xs font-medium sm:w-24 sm:shrink-0",
+          accent ? "text-[var(--warning)]" : "text-muted-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <Input type="time" className="h-9 w-[6.5rem] text-sm" value={start} onChange={(e) => onStart(e.target.value)} />
+        <span className="text-sm text-muted-foreground">até</span>
+        <Input type="time" className="h-9 w-[6.5rem] text-sm" value={end} onChange={(e) => onEnd(e.target.value)} />
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Remover intervalo"
+            className="focus-ring ml-1 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ConfiguracaoPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [baseline, setBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [newDoc, setNewDoc] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +198,7 @@ export default function ConfiguracaoPage() {
 
   function loadSettings() {
     return api.get<Settings>("/panel/settings").then((data) => {
-      setSettings({
+      const next: Settings = {
         ...data,
         name: data.name ?? "",
         aiName: data.aiName ?? "",
@@ -169,7 +214,9 @@ export default function ConfiguracaoPage() {
         calendarId: data.calendarId ?? null,
         googleRefreshToken: data.googleRefreshToken ?? null,
         reminderEnabled: data.reminderEnabled ?? true,
-      });
+      };
+      setSettings(next);
+      setBaseline(snapshot(next));
       setCalendarIdInput(data.calendarId ?? "");
     });
   }
@@ -267,9 +314,8 @@ export default function ConfiguracaoPage() {
         phone: toStoredPhoneBR(settings.phone),
         adminPhone: toStoredPhoneBR(settings.adminPhone),
       });
-      setSaved(true);
+      setBaseline(snapshot(settings));
       toast.success("Configurações salvas");
-      setTimeout(() => setSaved(false), 2500);
     } catch (err: any) {
       toast.error(err.message || "Erro ao salvar");
     } finally {
@@ -300,6 +346,7 @@ export default function ConfiguracaoPage() {
     settings.aiObjective === "triagem"
       ? "Informações para triagem"
       : "Documentos necessários";
+  const dirty = baseline !== null && snapshot(settings) !== baseline;
 
   return (
     <div className={wrap}>
@@ -311,7 +358,7 @@ export default function ConfiguracaoPage() {
           {[
             { id: "negocio", label: "Negócio", icon: Building2 },
             { id: "ia", label: "IA", icon: Bot },
-            { id: "docs", label: "Documentos", icon: FileText },
+            { id: "docs", label: settings.aiObjective === "triagem" ? "Triagem" : "Documentos", icon: FileText },
             { id: "horarios", label: "Horários", icon: Clock },
             { id: "integracoes", label: "Integrações", icon: Plug },
           ].map((s) => {
@@ -340,17 +387,17 @@ export default function ConfiguracaoPage() {
         {tab === "negocio" && (
         <div className="space-y-6">
           <SectionCard icon={Building2} title="Dados do negócio" description="Informações básicas usadas pela IA e nas notificações.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nome do negócio" htmlFor="name">
-                <Input id="name" value={settings.name} onChange={(e) => update("name", e.target.value)} />
-              </Field>
-              <Field label="WhatsApp do negócio" htmlFor="phone">
+            <Field label="Nome do negócio" htmlFor="name">
+              <Input id="name" value={settings.name} onChange={(e) => update("name", e.target.value)} />
+            </Field>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="WhatsApp do negócio" htmlFor="phone" hint="Número conectado que atende seus clientes.">
                 <Input id="phone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.phone)} onChange={(e) => update("phone", localPhoneBR(e.target.value))} />
               </Field>
+              <Field label="WhatsApp do admin" htmlFor="adminPhone" hint="Recebe notificações de agendamentos e triagens.">
+                <Input id="adminPhone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", localPhoneBR(e.target.value))} />
+              </Field>
             </div>
-            <Field label="WhatsApp do admin (notificações)" htmlFor="adminPhone" className="mt-4">
-              <Input id="adminPhone" inputMode="tel" placeholder="(11) 99999-9999" value={maskPhoneBR(settings.adminPhone)} onChange={(e) => update("adminPhone", localPhoneBR(e.target.value))} />
-            </Field>
           </SectionCard>
         </div>
         )}
@@ -484,8 +531,8 @@ export default function ConfiguracaoPage() {
                 onChange={(e) => setNewDoc(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addDoc())}
               />
-              <Button type="button" variant="outline" size="icon" onClick={addDoc} aria-label="Adicionar">
-                <Plus className="size-4" />
+              <Button type="button" variant="outline" onClick={addDoc} className="shrink-0">
+                <Plus className="size-4" /> Adicionar
               </Button>
             </div>
           </SectionCard>
@@ -496,61 +543,75 @@ export default function ConfiguracaoPage() {
         {tab === "horarios" && (
         <div className="space-y-6">
           <SectionCard icon={Clock} title="Horários de atendimento" description="Defina os dias e horários em que a IA pode agendar.">
-            <Field label="Duração padrão do agendamento (minutos)" htmlFor="duration">
-              <Input
-                id="duration"
-                type="number"
-                min={15}
-                step={15}
-                className="w-32"
-                value={settings.appointmentDuration}
-                onChange={(e) => update("appointmentDuration", Number(e.target.value))}
-              />
+            <Field
+              label="Duração padrão do agendamento"
+              htmlFor="duration"
+              hint="Usada para calcular o fim de cada horário que a IA oferece."
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  id="duration"
+                  type="number"
+                  min={15}
+                  step={15}
+                  className="w-24"
+                  value={settings.appointmentDuration}
+                  onChange={(e) => update("appointmentDuration", Number(e.target.value))}
+                />
+                <span className="text-sm text-muted-foreground">minutos</span>
+              </div>
             </Field>
 
             <div className="mt-5 space-y-2.5">
               {DAYS.map(({ key, label }) => {
                 const day = settings.workingHours[key] ?? { start: "08:00", end: "18:00", enabled: false };
                 return (
-                  <div key={key} className="rounded-xl border border-border p-3">
-                    <div className="flex flex-wrap items-center gap-3">
+                  <div
+                    key={key}
+                    className={cn(
+                      "rounded-xl border p-3 transition-colors",
+                      day.enabled ? "border-border" : "border-transparent bg-muted/40"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
                       <Switch checked={day.enabled} onCheckedChange={() => toggleDay(key)} id={`day-${key}`} />
                       <label
                         htmlFor={`day-${key}`}
-                        className={cn("w-20 cursor-pointer select-none text-sm font-medium", day.enabled ? "text-foreground" : "text-muted-foreground")}
+                        className={cn("cursor-pointer select-none text-sm font-medium", day.enabled ? "text-foreground" : "text-muted-foreground")}
                       >
                         {label}
                       </label>
-                      {day.enabled ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <Input type="time" className="h-9 w-28 text-sm" value={day.start} onChange={(e) => setHour(key, "start", e.target.value)} />
-                            <span className="text-sm text-muted-foreground">até</span>
-                            <Input type="time" className="h-9 w-28 text-sm" value={day.end} onChange={(e) => setHour(key, "end", e.target.value)} />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleLunch(key)}
-                            className={cn(
-                              "rounded-md border px-2 py-1 text-xs transition-colors",
-                              day.lunchStart
-                                ? "border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[var(--warning-soft)] text-[var(--warning)]"
-                                : "border-dashed border-border text-muted-foreground hover:border-[var(--border-m)] hover:text-foreground"
-                            )}
-                          >
-                            {day.lunchStart ? "intervalo" : "+ intervalo"}
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Fechado</span>
+                      {day.enabled && !day.lunchStart && (
+                        <button
+                          type="button"
+                          onClick={() => toggleLunch(key)}
+                          className="focus-ring ml-auto rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-[var(--border-m)] hover:text-foreground"
+                        >
+                          + Intervalo
+                        </button>
                       )}
+                      {!day.enabled && <span className="ml-auto text-sm text-muted-foreground">Fechado</span>}
                     </div>
-                    {day.enabled && day.lunchStart && (
-                      <div className="mt-2.5 flex items-center gap-2 pl-[3.25rem]">
-                        <span className="w-14 text-xs text-[var(--warning)]">intervalo</span>
-                        <Input type="time" className="h-8 w-28 text-sm" value={day.lunchStart} onChange={(e) => setHour(key, "lunchStart", e.target.value)} />
-                        <span className="text-sm text-muted-foreground">até</span>
-                        <Input type="time" className="h-8 w-28 text-sm" value={day.lunchEnd ?? "13:00"} onChange={(e) => setHour(key, "lunchEnd", e.target.value)} />
+                    {day.enabled && (
+                      <div className="mt-3 space-y-2.5">
+                        <TimeRange
+                          label="Atendimento"
+                          start={day.start}
+                          end={day.end}
+                          onStart={(v) => setHour(key, "start", v)}
+                          onEnd={(v) => setHour(key, "end", v)}
+                        />
+                        {day.lunchStart && (
+                          <TimeRange
+                            label="Intervalo"
+                            accent
+                            start={day.lunchStart}
+                            end={day.lunchEnd ?? "13:00"}
+                            onStart={(v) => setHour(key, "lunchStart", v)}
+                            onEnd={(v) => setHour(key, "lunchEnd", v)}
+                            onRemove={() => toggleLunch(key)}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -581,22 +642,23 @@ export default function ConfiguracaoPage() {
             title="Google Calendar"
             description="Conecte sua conta Google para que os agendamentos apareçam no seu calendário."
           >
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
               {settings.googleRefreshToken ? (
-                <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent-strong)]">
-                  <Check className="size-4" /> Conta Google conectada
+                <span className="flex items-center gap-2 text-sm font-medium text-[var(--accent-strong)]">
+                  <CalendarCheck className="size-4" /> Conta Google conectada
                 </span>
               ) : (
-                <span className="text-sm text-muted-foreground">Nenhuma conta conectada</span>
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CalendarX className="size-4" /> Nenhuma conta conectada
+                </span>
               )}
               <Button variant="outline" size="sm" onClick={connectGoogle}>
-                <CalendarCheck className="size-3.5" />
                 {settings.googleRefreshToken ? "Reconectar" : "Conectar conta Google"}
               </Button>
             </div>
 
             <Field label="ID da agenda" htmlFor="calendarId" className="mt-4" hint="Crie uma agenda no Google Calendar e copie o ID dela (ex: nome@group.calendar.google.com). Use “primary” para a agenda principal.">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   id="calendarId"
                   className="font-mono text-sm"
@@ -604,14 +666,14 @@ export default function ConfiguracaoPage() {
                   value={calendarIdInput}
                   onChange={(e) => setCalendarIdInput(e.target.value)}
                 />
-                <Button size="default" onClick={saveCalendarId} disabled={savingCalendar} className="shrink-0">
-                  Salvar
+                <Button onClick={saveCalendarId} disabled={savingCalendar} className="shrink-0">
+                  {savingCalendar ? "Salvando..." : "Salvar ID"}
                 </Button>
               </div>
             </Field>
             {settings.calendarId && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Atual: <span className="font-mono">{settings.calendarId}</span>
+                Agenda atual: <span className="font-mono">{settings.calendarId}</span>
               </p>
             )}
           </SectionCard>
@@ -620,13 +682,25 @@ export default function ConfiguracaoPage() {
         </div>
       </div>
 
-      {/* Sticky save bar */}
-      <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-end gap-3 border-t border-border bg-background/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        {saved && <span className="text-sm text-[var(--accent-strong)]">Alterações salvas</span>}
-        <Button onClick={save} disabled={saving} className="min-w-[160px]">
-          <Save className="size-4" />
-          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar configurações"}
-        </Button>
+      {/* Floating save bar */}
+      <div className="pointer-events-none sticky bottom-4 z-10 mt-8 flex justify-end">
+        <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border bg-card/95 p-2 pl-4 shadow-lg backdrop-blur">
+          {dirty ? (
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="size-2 shrink-0 rounded-full bg-[var(--warning)]" />
+              Alterações não salvas
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Check className="size-4 text-[var(--accent-strong)]" />
+              Tudo salvo
+            </span>
+          )}
+          <Button onClick={save} disabled={saving || !dirty} className="min-w-[150px]">
+            <Save className="size-4" />
+            {saving ? "Salvando..." : "Salvar configurações"}
+          </Button>
+        </div>
       </div>
     </div>
   );
