@@ -106,6 +106,7 @@ router.get("/settings", async (req, res) => {
         calendarId: true, googleRefreshToken: true, reminderEnabled: true,
       },
     });
+    if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
     res.json(clinic);
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
@@ -171,7 +172,12 @@ router.get("/conversations", async (req, res) => {
     const where: any = { clinicId: clinicId(req) };
     if (humanMode === "true") where.humanMode = true;
     if (triagemCompleta === "true") where.triagemCompleta = true;
-    if (search) where.contactPhone = { contains: String(search) };
+    if (search) {
+      where.OR = [
+        { contactName: { contains: String(search), mode: "insensitive" } },
+        { contactPhone: { contains: String(search) } },
+      ];
+    }
 
     const [conversations, total] = await Promise.all([
       prisma.conversation.findMany({
