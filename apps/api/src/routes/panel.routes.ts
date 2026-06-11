@@ -5,11 +5,17 @@ import { evolutionService } from "../services/evolution.service";
 import { calendarService } from "../services/calendar.service";
 import { mpService } from "../services/mp.service";
 import { config } from "../config";
+import { documentService } from "../services/document.service";
+import { uploadSingleFile } from "../middleware/upload.middleware";
+import presetRoutes from "./preset.routes";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+const MAX_DOCS_PER_CLINIC = 5;
+
 const router = Router();
 router.use(authMiddleware);
+router.use("/master/presets", requireMaster, presetRoutes);
 
 // Helper: garante que o usuário só acessa sua própria clínica
 function clinicId(req: any): string {
@@ -100,10 +106,11 @@ router.get("/settings", async (req, res) => {
       where: { id: clinicId(req) },
       select: {
         id: true, name: true, slug: true, phone: true,
-        aiName: true, systemPrompt: true, services: true, requiredDocs: true, companyInfo: true,
+        aiName: true, clientInstructions: true, services: true, requiredDocs: true, companyInfo: true,
         workingHours: true, appointmentDuration: true,
         adminPhone: true, active: true, evolutionInstance: true, aiObjective: true,
         calendarId: true, googleRefreshToken: true, reminderEnabled: true,
+        preset: { select: { id: true, name: true, description: true } },
       },
     });
     if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
@@ -113,13 +120,41 @@ router.get("/settings", async (req, res) => {
 
 router.patch("/settings", async (req, res) => {
   try {
-    const allowed = ["name", "aiName", "systemPrompt", "services", "requiredDocs",
+    const allowed = ["name", "aiName", "clientInstructions", "services", "requiredDocs",
                      "workingHours", "appointmentDuration", "adminPhone", "phone", "companyInfo", "aiObjective", "reminderEnabled"];
     const data = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => allowed.includes(k))
     );
     const clinic = await prisma.clinic.update({ where: { id: clinicId(req) }, data });
     res.json(clinic);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// ── Documentos de conhecimento da própria clínica ────────────────────────────
+
+router.get("/documents", async (req, res) => {
+  try {
+    const docs = await prisma.knowledgeDocument.findMany({
+      where: { clinicId: clinicId(req) },
+      select: { id: true, filename: true, mimeType: true, sizeBytes: true, charCount: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(docs);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.post("/documents", uploadSingleFile, async (req, res) => {
+  try { await uploadClinicDocument(clinicId(req), req, res); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.delete("/documents/:docId", async (req, res) => {
+  try {
+    const { count } = await prisma.knowledgeDocument.deleteMany({
+      where: { id: req.params.docId as string, clinicId: clinicId(req) },
+    });
+    if (count === 0) { res.status(404).json({ error: "Documento não encontrado" }); return; }
+    res.status(204).end();
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 
@@ -398,7 +433,7 @@ router.post("/master/clinics", requireMaster, async (req, res) => {
     name: z.string().min(2),
     slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
     evolutionInstance: z.string().min(2),
-    systemPrompt: z.string().default("Você é uma atendente virtual. Seja simpática e prestativa."),
+    presetId: z.string().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
@@ -463,6 +498,70 @@ router.post("/master/clinics/:clinicId/users", requireMaster, async (req, res) =
     },
   });
   res.status(201).json({ id: user.id, name: user.name, email: user.email });
+});
+
+// ── Master: configuração de IA por clínica ──────────────────────────────────
+
+const docSelect = {
+  id: true, filename: true, mimeType: true, sizeBytes: true, charCount: true, createdAt: true,
+} as const;
+
+router.get("/master/clinics/:clinicId/ai-config", requireMaster, async (req, res) => {
+  const clinic = await prisma.clinic.findUnique({
+    where: { id: req.params.clinicId as string },
+    select: {
+      id: true, name: true, presetId: true, adminPrompt: true, clientInstructions: true,
+      preset: { select: { id: true, name: true } },
+      documents: { select: docSelect, orderBy: { createdAt: "desc" } },
+    },
+  });
+  if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
+  res.json(clinic);
+});
+
+router.patch("/master/clinics/:clinicId/ai-config", requireMaster, async (req, res) => {
+  const schema = z.object({
+    presetId: z.string().nullable().optional(),
+    adminPrompt: z.string().nullable().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  try {
+    if (parsed.data.presetId) {
+      const preset = await prisma.preset.findUnique({ where: { id: parsed.data.presetId } });
+      if (!preset) { res.status(404).json({ error: "Preset não encontrado" }); return; }
+    }
+    const clinic = await prisma.clinic.update({
+      where: { id: req.params.clinicId as string },
+      data: parsed.data,
+      select: { id: true, presetId: true, adminPrompt: true },
+    });
+    res.json(clinic);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+async function uploadClinicDocument(cId: string, req: any, res: any) {
+  const count = await prisma.knowledgeDocument.count({ where: { clinicId: cId } });
+  if (count >= MAX_DOCS_PER_CLINIC) {
+    res.status(400).json({ error: `Limite de ${MAX_DOCS_PER_CLINIC} documentos por clínica atingido.` });
+    return;
+  }
+  const doc = await documentService.ingest(req.file!, { clinicId: cId, uploadedBy: req.auth?.userId });
+  res.status(201).json(doc);
+}
+
+router.post("/master/clinics/:clinicId/documents", requireMaster, uploadSingleFile, async (req, res) => {
+  try { await uploadClinicDocument(req.params.clinicId as string, req, res); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.delete("/master/clinics/:clinicId/documents/:docId", requireMaster, async (req, res) => {
+  const { count } = await prisma.knowledgeDocument.deleteMany({
+    where: { id: req.params.docId as string, clinicId: req.params.clinicId as string },
+  });
+  if (count === 0) { res.status(404).json({ error: "Documento não encontrado" }); return; }
+  res.status(204).end();
 });
 
 router.get("/master/clinics/:clinicId/google/auth-url", requireMaster, async (req, res) => {

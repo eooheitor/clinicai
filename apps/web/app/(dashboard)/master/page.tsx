@@ -16,9 +16,11 @@ import { ListSkeleton } from "@/components/skeletons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/field";
 import { Stagger, StaggerItem } from "@/components/motion";
+import { KnowledgeDocs, type KnowledgeDoc } from "@/components/knowledge-docs";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
-  Building2, Plus, MessageSquare, Calendar, Users, PowerOff, Power, Trash2, CheckCircle2,
+  Building2, Plus, MessageSquare, Calendar, Users, PowerOff, Power, Trash2, CheckCircle2, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +31,16 @@ interface Clinic {
 }
 interface NewClinic { name: string; slug: string; evolutionInstance: string; }
 interface NewUser { name: string; email: string; password: string; }
+interface PresetOption { id: string; name: string; active: boolean; }
+interface AiConfig {
+  id: string;
+  name: string;
+  presetId: string | null;
+  adminPrompt: string | null;
+  clientInstructions: string | null;
+  preset: { id: string; name: string } | null;
+  documents: KnowledgeDoc[];
+}
 
 const wrap = "px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
 
@@ -43,6 +55,10 @@ export default function MasterPage() {
   const [nc, setNc] = useState<NewClinic>({ name: "", slug: "", evolutionInstance: "" });
   const [nu, setNu] = useState<NewUser>({ name: "", email: "", password: "" });
   const [saving, setSaving] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
+  const [presetOptions, setPresetOptions] = useState<PresetOption[]>([]);
+  const [aiForm, setAiForm] = useState<{ presetId: string; adminPrompt: string }>({ presetId: "", adminPrompt: "" });
+  const [savingAi, setSavingAi] = useState(false);
 
   useEffect(() => {
     const u = getUser();
@@ -127,6 +143,51 @@ export default function MasterPage() {
     }
   }
 
+  async function openAiConfig(clinic: Clinic) {
+    try {
+      const [config, presets] = await Promise.all([
+        api.get<AiConfig>(`/panel/master/clinics/${clinic.id}/ai-config`),
+        api.get<PresetOption[]>("/panel/master/presets"),
+      ]);
+      setAiConfig(config);
+      setPresetOptions(presets.filter((p) => p.active));
+      setAiForm({ presetId: config.presetId ?? "", adminPrompt: config.adminPrompt ?? "" });
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function saveAiConfig() {
+    if (!aiConfig) return;
+    setSavingAi(true);
+    try {
+      await api.patch(`/panel/master/clinics/${aiConfig.id}/ai-config`, {
+        presetId: aiForm.presetId || null,
+        adminPrompt: aiForm.adminPrompt.trim() || null,
+      });
+      toast.success("Configuração de IA salva");
+      setAiConfig(null);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingAi(false);
+    }
+  }
+
+  async function uploadClinicDoc(file: File) {
+    if (!aiConfig) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    const doc = await api.upload<KnowledgeDoc>(`/panel/master/clinics/${aiConfig.id}/documents`, fd);
+    setAiConfig((c) => (c ? { ...c, documents: [doc, ...c.documents] } : c));
+  }
+
+  async function deleteClinicDoc(doc: KnowledgeDoc) {
+    if (!aiConfig) return;
+    await api.delete(`/panel/master/clinics/${aiConfig.id}/documents/${doc.id}`);
+    setAiConfig((c) => (c ? { ...c, documents: c.documents.filter((d) => d.id !== doc.id) } : c));
+  }
+
   const userClinic = clinics.find((c) => c.id === showUser);
 
   return (
@@ -188,6 +249,9 @@ export default function MasterPage() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setShowUser(c.id); setNu({ name: "", email: "", password: "" }); }}>
                       <Users className="size-3.5" /> Criar usuário
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openAiConfig(c)}>
+                      <Sparkles className="size-3.5" /> Configurar IA
                     </Button>
                     <Button
                       variant="outline"
@@ -256,6 +320,84 @@ export default function MasterPage() {
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
             <Button onClick={() => showUser && createUser(showUser)} disabled={saving}>{saving ? "Criando..." : "Criar usuário"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI config dialog */}
+      <Dialog open={aiConfig !== null} onOpenChange={(o) => !o && setAiConfig(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Configurar IA</DialogTitle>
+            <DialogDescription>
+              {aiConfig ? `Preset, instruções e documentos de ${aiConfig.name}.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {aiConfig && (
+            <div className="space-y-4">
+              <Field
+                label="Preset vinculado"
+                htmlFor="ai-preset"
+                hint="O prompt principal e o escopo de assuntos vêm do preset. Sem preset, a clínica usa o comportamento legado (texto livre do cliente)."
+              >
+                <select
+                  id="ai-preset"
+                  value={aiForm.presetId}
+                  onChange={(e) => setAiForm((f) => ({ ...f, presetId: e.target.value }))}
+                  className="focus-ring h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
+                >
+                  <option value="">Sem preset (legado)</option>
+                  {presetOptions.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
+                label="Instruções do administrador para esta unidade"
+                htmlFor="ai-admin-prompt"
+                hint="Ajustes específicos desta clínica, somados ao preset. Opcional."
+              >
+                <Textarea
+                  id="ai-admin-prompt"
+                  rows={5}
+                  value={aiForm.adminPrompt}
+                  onChange={(e) => setAiForm((f) => ({ ...f, adminPrompt: e.target.value }))}
+                  placeholder="Ex: esta unidade não atende convênios; priorize agendamentos à tarde..."
+                  className="resize-none font-mono text-xs leading-relaxed"
+                />
+              </Field>
+
+              {aiConfig.clientInstructions?.trim() && (
+                <Field
+                  label="Instruções escritas pelo cliente (somente leitura)"
+                  htmlFor="ai-client-instructions"
+                  hint="Com preset vinculado, este texto vira seção complementar subordinada. Revise se ele conflita com o preset."
+                >
+                  <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                    {aiConfig.clientInstructions}
+                  </div>
+                </Field>
+              )}
+
+              <Field label="Documentos da clínica" htmlFor="ai-docs">
+                <KnowledgeDocs
+                  docs={aiConfig.documents}
+                  limit={5}
+                  onUpload={uploadClinicDoc}
+                  onDelete={deleteClinicDoc}
+                  hint="Somados aos documentos do preset. O cliente também pode anexar pelos próprios ajustes."
+                />
+              </Field>
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button onClick={saveAiConfig} disabled={savingAi}>
+              {savingAi ? "Salvando..." : "Salvar configuração"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

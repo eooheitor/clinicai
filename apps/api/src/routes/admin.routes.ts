@@ -57,7 +57,6 @@ const createClinicSchema = z.object({
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
   evolutionInstance: z.string().min(2),
   aiName: z.string().default("Ana"),
-  systemPrompt: z.string().optional(),
   services: z.array(z.string()).default([]),
   workingHours: z
     .record(
@@ -108,7 +107,6 @@ router.post("/clinics", async (req, res) => {
       slug: data.slug,
       evolutionInstance: data.evolutionInstance,
       aiName: data.aiName,
-      systemPrompt: data.systemPrompt ?? "",
       services: data.services,
       workingHours: data.workingHours,
       appointmentDuration: data.appointmentDuration,

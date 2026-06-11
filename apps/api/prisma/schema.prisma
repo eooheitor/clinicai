@@ -32,7 +32,9 @@ model Clinic {
   phone               String?
   evolutionInstance   String         @unique
   aiName              String         @default("Ana")
-  systemPrompt        String
+  clientInstructions  String?
+  adminPrompt         String?
+  presetId            String?
   services            Json           @default("[]")
   workingHours        Json           @default("{}")
   calendarId          String?
@@ -51,8 +53,42 @@ model Clinic {
   appointments        Appointment[]
   conversations       Conversation[]
   users               User[]
+  preset              Preset?        @relation(fields: [presetId], references: [id])
+  documents           KnowledgeDocument[]
 
   @@map("clinics")
+}
+
+model Preset {
+  id            String              @id @default(cuid())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  name          String              @unique
+  description   String?
+  basePrompt    String
+  allowedTopics Json                @default("[]")
+  active        Boolean             @default(true)
+  clinics       Clinic[]
+  documents     KnowledgeDocument[]
+
+  @@map("presets")
+}
+
+model KnowledgeDocument {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  charCount  Int
+  content    String
+  uploadedBy String?
+  presetId   String?
+  clinicId   String?
+  preset     Preset?  @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  clinic     Clinic?  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_documents")
 }
 
 model Conversation {
