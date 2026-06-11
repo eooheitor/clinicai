@@ -26,7 +26,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string(),
   WEB_URL: z.string().default("http://localhost:3001"),
   RESEND_API_KEY: z.string().default(""),
-  TRIAL_DAYS: z.coerce.number().default(7),
+  TRIAL_DAYS: z.coerce.number().default(3),
   FROM_EMAIL: z.string().default("onboarding@resend.dev"),
   MP_ACCESS_TOKEN: z.string().default(""),
 });

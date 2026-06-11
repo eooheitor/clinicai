@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
@@ -31,14 +31,22 @@ export function Inbox({ initialId }: { initialId?: string }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | undefined>(initialId);
   const isMobile = useIsMobile();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [search]);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
+    if (debouncedSearch) params.set("search", debouncedSearch);
     if (filter === "humano") params.set("humanMode", "true");
     if (filter === "triagem") params.set("triagemCompleta", "true");
     try {
@@ -50,7 +58,7 @@ export function Inbox({ initialId }: { initialId?: string }) {
     } finally {
       setLoading(false);
     }
-  }, [search, filter]);
+  }, [debouncedSearch, filter]);
 
   useEffect(() => {
     load();
