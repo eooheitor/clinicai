@@ -11,7 +11,28 @@ import { Field } from "@/components/field";
 import { StatusPill } from "@/components/status-pill";
 import { Reveal } from "@/components/motion";
 import { getInitials } from "@/lib/utils";
-import { UserRound, KeyRound, Building2, ShieldCheck } from "lucide-react";
+import { UserRound, KeyRound, Building2, ShieldCheck, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+function passwordStrength(password: string) {
+  const hasLength = password.length >= 6;
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  if (!password) return { level: 0, label: "", color: "" };
+  if (!hasLength) return { level: 1, label: "Fraca", color: "bg-destructive" };
+  if (hasLength && !hasSpecial) return { level: 2, label: "Média", color: "bg-amber-500" };
+  if (hasLength && hasSpecial && !hasUpper) return { level: 3, label: "Boa", color: "bg-[var(--accent-strong)]" };
+  return { level: 4, label: "Forte", color: "bg-[var(--accent-strong)]" };
+}
+
+function Criterion({ met, label }: { met: boolean; label: string }) {
+  return (
+    <span className={cn("flex items-center gap-1.5 text-xs transition-colors duration-200", met ? "text-[var(--accent-strong)]" : "text-muted-foreground")}>
+      {met ? <Check className="size-3" /> : <X className="size-3" />}
+      {label}
+    </span>
+  );
+}
 import { toast } from "sonner";
 
 const wrap = "px-4 py-6 sm:px-6 lg:px-8 lg:py-8";
@@ -69,6 +90,10 @@ export default function PerfilPage() {
     }
     if (newPassword.length < 6) {
       toast.error("Senha deve ter ao menos 6 caracteres");
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(newPassword)) {
+      toast.error("A senha deve conter ao menos um caractere especial");
       return;
     }
     setSavingPassword(true);
@@ -137,7 +162,32 @@ export default function PerfilPage() {
         >
           <div className="space-y-4">
             <Field label="Senha atual" htmlFor="currentPassword"><Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" /></Field>
-            <Field label="Nova senha" htmlFor="newPassword"><Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" /></Field>
+            <div className="space-y-2">
+              <Field label="Nova senha" htmlFor="newPassword">
+                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+              </Field>
+              {newPassword.length > 0 && (() => {
+                const strength = passwordStrength(newPassword);
+                const hasLength = newPassword.length >= 6;
+                const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 3, 4].map((bar) => (
+                        <div key={bar} className={cn("h-1 flex-1 rounded-full transition-all duration-300", strength.level >= bar ? strength.color : "bg-muted")} />
+                      ))}
+                      <span className={cn("ml-1 min-w-[36px] text-right text-xs font-semibold transition-colors duration-300", strength.level === 1 && "text-destructive", strength.level === 2 && "text-amber-500", strength.level >= 3 && "text-[var(--accent-strong)]")}>
+                        {strength.label}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Criterion met={hasLength} label="Mínimo 6 caracteres" />
+                      <Criterion met={hasSpecial} label="Ao menos um caractere especial (@, #, !, %...)" />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
             <Field label="Confirmar nova senha" htmlFor="confirmPassword"><Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" /></Field>
           </div>
         </SectionCard>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../database/prisma";
@@ -89,6 +90,16 @@ router.post("/login", async (req, res) => {
   });
 });
 
+// Áreas de atuação disponíveis (presets públicos para o cadastro)
+router.get("/areas", async (_req, res) => {
+  const presets = await prisma.preset.findMany({
+    where: { active: true },
+    select: { id: true, name: true, description: true },
+    orderBy: { name: "asc" },
+  });
+  res.json(presets);
+});
+
 // Registro público — cria clínica + usuário + instância WhatsApp automaticamente
 router.post("/register", async (req, res) => {
   const schema = z.object({
@@ -100,6 +111,7 @@ router.post("/register", async (req, res) => {
       message: "A senha deve conter ao menos um caractere especial.",
     }),
     clinicName: z.string().min(2),
+    presetId: z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -108,7 +120,7 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const { name, email, password, clinicName } = parsed.data;
+  const { name, email, password, clinicName, presetId } = parsed.data;
 
   const emailExists = await prisma.user.findUnique({ where: { email } });
   if (emailExists) {
@@ -129,6 +141,7 @@ router.post("/register", async (req, res) => {
       evolutionInstance: slug,
       subscriptionStatus: "TRIAL",
       trialEndsAt,
+      ...(presetId ? { presetId } : {}),
     },
   });
 
@@ -199,7 +212,9 @@ router.patch("/me", authMiddleware, async (req, res) => {
     name: z.string().min(1).optional(),
     email: z.string().email().optional(),
     currentPassword: z.string().optional(),
-    newPassword: z.string().min(6).optional(),
+    newPassword: z.string().min(6).refine((v) => /[^A-Za-z0-9]/.test(v), {
+      message: "A senha deve conter ao menos um caractere especial.",
+    }).optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -256,6 +271,56 @@ router.post("/setup", async (req, res) => {
   });
 
   res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role });
+});
+
+// Solicitar redefinição de senha
+router.post("/forgot-password", async (req, res) => {
+  const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Email inválido" }); return; }
+
+  // Sempre retorna 200 para não revelar se o email existe
+  res.json({ ok: true });
+
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  if (!user) return;
+
+  // Invalida tokens anteriores do mesmo usuário
+  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+  await prisma.passwordResetToken.create({ data: { token, userId: user.id, expiresAt } });
+
+  const resetUrl = `${config.WEB_URL}/redefinir-senha/${token}`;
+  try {
+    await emailService.sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+  } catch (err) {
+    console.error("Erro ao enviar email de reset:", err);
+  }
+});
+
+// Redefinir senha com token
+router.post("/reset-password", async (req, res) => {
+  const schema = z.object({
+    token: z.string(),
+    password: z.string().min(6).refine((v) => /[^A-Za-z0-9]/.test(v), {
+      message: "A senha deve conter ao menos um caractere especial.",
+    }),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten().fieldErrors }); return; }
+
+  const record = await prisma.passwordResetToken.findUnique({ where: { token: parsed.data.token } });
+  if (!record || record.expiresAt < new Date()) {
+    res.status(400).json({ error: "Link inválido ou expirado. Solicite um novo." });
+    return;
+  }
+
+  const hashed = await bcrypt.hash(parsed.data.password, 10);
+  await prisma.user.update({ where: { id: record.userId }, data: { password: hashed } });
+  await prisma.passwordResetToken.delete({ where: { id: record.id } });
+
+  res.json({ ok: true });
 });
 
 export { router as authRouter };

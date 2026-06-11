@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth.routes";
 import { panelRouter } from "./routes/panel.routes";
 import { prisma } from "./database/prisma";
 import { startReminderJob } from "./jobs/reminder.job";
+import { startTrialExpiryJob } from "./jobs/trial-expiry.job";
 
 const app = express();
 
@@ -35,6 +36,7 @@ async function main() {
   console.log("✅ Banco de dados conectado");
 
   startReminderJob();
+  startTrialExpiryJob();
 
   app.listen(config.PORT, "0.0.0.0", () => {
     console.log(`🚀 FluxoIA Zap API rodando na porta ${config.PORT}`);

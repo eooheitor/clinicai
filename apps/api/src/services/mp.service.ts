@@ -26,7 +26,7 @@ export const mpService = {
           title: "ClinicAI — Assinatura Mensal",
           description: params.clinicName,
           quantity: 1,
-          unit_price: 150,
+          unit_price: 79.9,
           currency_id: "BRL",
         }],
         external_reference: params.clinicId,

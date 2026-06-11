@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -9,14 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
 import { AuthShell } from "@/components/auth-shell";
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface Area { id: string; name: string; description: string }
 
 function passwordStrength(password: string) {
   const hasLength = password.length >= 6;
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
   const hasUpper = /[A-Z]/.test(password);
-
   if (!password) return { level: 0, label: "", color: "" };
   if (!hasLength) return { level: 1, label: "Fraca", color: "bg-destructive" };
   if (hasLength && !hasSpecial) return { level: 2, label: "Média", color: "bg-amber-500" };
@@ -28,11 +29,17 @@ export default function CadastroPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", clinicName: "" });
 
   const strength = passwordStrength(form.password);
   const hasLength = form.password.length >= 6;
   const hasSpecial = /[^A-Za-z0-9]/.test(form.password);
+
+  useEffect(() => {
+    api.get<Area[]>("/auth/areas").then(setAreas).catch(() => {});
+  }, []);
 
   function set(field: string) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -52,7 +59,8 @@ export default function CadastroPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.post<{ token: string; user: any }>("/auth/register", form);
+      const payload = { ...form, ...(selectedArea ? { presetId: selectedArea } : {}) };
+      const res = await api.post<{ token: string; user: any }>("/auth/register", payload);
       saveAuth(res.token, res.user);
       router.push("/dashboard");
     } catch (err: any) {
@@ -88,6 +96,47 @@ export default function CadastroPage() {
             required
           />
         </Field>
+
+        {areas.length > 0 && (
+          <div className="space-y-2">
+            <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <Sparkles className="size-3.5 text-[var(--accent-strong)]" />
+              Área de atuação
+              <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {areas.map((area) => {
+                const active = selectedArea === area.id;
+                return (
+                  <button
+                    key={area.id}
+                    type="button"
+                    onClick={() => setSelectedArea(active ? null : area.id)}
+                    className={cn(
+                      "relative rounded-xl border px-3 py-2.5 text-left transition-all duration-150",
+                      active
+                        ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] ring-1 ring-[var(--accent-strong)]"
+                        : "border-border bg-muted/30 hover:border-[var(--accent-strong)]/50 hover:bg-[var(--accent-soft)]/40"
+                    )}
+                  >
+                    {active && (
+                      <span className="absolute right-2 top-2 flex size-4 items-center justify-center rounded-full bg-[var(--accent-strong)]">
+                        <Check className="size-2.5 text-white" />
+                      </span>
+                    )}
+                    <p className={cn("text-xs font-semibold", active ? "text-[var(--accent-strong)]" : "text-foreground")}>
+                      {area.name}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
+                      {area.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <Field label="E-mail" htmlFor="email">
           <Input id="email" type="email" placeholder="maria@empresa.com" value={form.email} onChange={set("email")} required autoComplete="email" />
         </Field>
@@ -129,7 +178,6 @@ export default function CadastroPage() {
                   {strength.label}
                 </span>
               </div>
-
               <div className="flex flex-col gap-1">
                 <Criterion met={hasLength} label="Mínimo 6 caracteres" />
                 <Criterion met={hasSpecial} label="Ao menos um caractere especial (@, #, !, %...)" />
@@ -161,11 +209,7 @@ function Criterion({ met, label }: { met: boolean; label: string }) {
         met ? "text-[var(--accent-strong)]" : "text-muted-foreground"
       )}
     >
-      {met ? (
-        <Check className="size-3 shrink-0" />
-      ) : (
-        <X className="size-3 shrink-0 opacity-40" />
-      )}
+      {met ? <Check className="size-3 shrink-0" /> : <X className="size-3 shrink-0 opacity-40" />}
       {label}
     </span>
   );

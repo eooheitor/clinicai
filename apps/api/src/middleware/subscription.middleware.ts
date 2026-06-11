@@ -1,0 +1,24 @@
+import { Request, Response, NextFunction } from "express";
+import { prisma } from "../database/prisma";
+
+export async function subscriptionMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (!req.auth || req.auth.role === "MASTER") return next();
+  if (!req.auth.clinicId) return next();
+
+  const clinic = await prisma.clinic.findUnique({
+    where: { id: req.auth.clinicId },
+    select: { subscriptionStatus: true, trialEndsAt: true },
+  });
+
+  if (!clinic) { res.status(403).json({ error: "subscription_required", status: "UNKNOWN" }); return; }
+
+  const { subscriptionStatus, trialEndsAt } = clinic;
+  const trialExpired = subscriptionStatus === "TRIAL" && trialEndsAt && new Date() > trialEndsAt;
+
+  if (subscriptionStatus === "SUSPENDED" || subscriptionStatus === "CANCELLED" || trialExpired) {
+    res.status(403).json({ error: "subscription_required", status: subscriptionStatus });
+    return;
+  }
+
+  next();
+}
