@@ -92,9 +92,13 @@ router.post("/login", async (req, res) => {
 // Registro público — cria clínica + usuário + instância WhatsApp automaticamente
 router.post("/register", async (req, res) => {
   const schema = z.object({
-    name: z.string().min(2),
+    name: z.string().min(2).refine((v) => v.trim().split(/\s+/).length >= 2, {
+      message: "Informe nome e sobrenome.",
+    }),
     email: z.string().email(),
-    password: z.string().min(6),
+    password: z.string().min(6).refine((v) => /[^A-Za-z0-9]/.test(v), {
+      message: "A senha deve conter ao menos um caractere especial.",
+    }),
     clinicName: z.string().min(2),
   });
 
@@ -148,7 +152,6 @@ router.post("/register", async (req, res) => {
       to: email,
       name,
       clinicName,
-      password,
       trialDays: config.TRIAL_DAYS,
     });
   } catch (err) {
