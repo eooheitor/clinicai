@@ -17,6 +17,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Field } from "@/components/field";
 import { Stagger, StaggerItem } from "@/components/motion";
 import { KnowledgeDocs, type KnowledgeDoc } from "@/components/knowledge-docs";
+import { PresetPicker } from "@/components/preset-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -341,17 +342,12 @@ export default function MasterPage() {
                 htmlFor="ai-preset"
                 hint="O prompt principal e o escopo de assuntos vêm do preset. Sem preset, a clínica usa o comportamento legado (texto livre do cliente)."
               >
-                <select
-                  id="ai-preset"
-                  value={aiForm.presetId}
-                  onChange={(e) => setAiForm((f) => ({ ...f, presetId: e.target.value }))}
-                  className="focus-ring h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground"
-                >
-                  <option value="">Sem preset (legado)</option>
-                  {presetOptions.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <PresetPicker
+                  allowNone
+                  presets={presetOptions}
+                  value={aiForm.presetId || null}
+                  onChange={(id) => setAiForm((f) => ({ ...f, presetId: id ?? "" }))}
+                />
               </Field>
 
               <Field

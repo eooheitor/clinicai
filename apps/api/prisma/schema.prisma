@@ -44,6 +44,7 @@ model Clinic {
   evolutionInstance   String         @unique
   aiName              String         @default("Ana")
   clientInstructions  String?
+  clientInstructionsCompiled String?
   adminPrompt         String?
   presetId            String?
   services            Json           @default("[]")

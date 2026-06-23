@@ -9,6 +9,7 @@ import { config } from "../config";
 import { documentService } from "../services/document.service";
 import { uploadSingleFile } from "../middleware/upload.middleware";
 import presetRoutes from "./preset.routes";
+import { openaiService } from "../services/openai.service";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -106,6 +107,18 @@ router.get("/dashboard", async (req, res) => {
 
 // ── Configuração da clínica / IA ─────────────────────────────────────────────
 
+// Lista de áreas (presets ativos) para o cliente escolher na configuração
+router.get("/presets", async (_req, res) => {
+  try {
+    const presets = await prisma.preset.findMany({
+      where: { active: true },
+      select: { id: true, name: true, description: true },
+      orderBy: { name: "asc" },
+    });
+    res.json(presets);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
 router.get("/settings", async (req, res) => {
   try {
     const clinic = await prisma.clinic.findUnique({
@@ -127,11 +140,49 @@ router.get("/settings", async (req, res) => {
 router.patch("/settings", async (req, res) => {
   try {
     const allowed = ["name", "aiName", "clientInstructions", "services", "requiredDocs",
-                     "workingHours", "appointmentDuration", "adminPhone", "phone", "companyInfo", "aiObjective", "reminderEnabled"];
-    const data = Object.fromEntries(
+                     "workingHours", "appointmentDuration", "adminPhone", "phone", "companyInfo",
+                     "aiObjective", "reminderEnabled", "presetId"];
+    const data: Record<string, any> = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => allowed.includes(k))
     );
-    const clinic = await prisma.clinic.update({ where: { id: clinicId(req) }, data });
+
+    const id = clinicId(req);
+
+    // Valida a área (preset) escolhida
+    let presetName: string | undefined;
+    if (data.presetId) {
+      const preset = await prisma.preset.findFirst({
+        where: { id: data.presetId, active: true },
+        select: { name: true },
+      });
+      if (!preset) { res.status(404).json({ error: "Área (preset) inválida" }); return; }
+      presetName = preset.name;
+    }
+
+    // Polimento híbrido: reescreve as instruções do cliente apenas quando elas mudam
+    if (Object.prototype.hasOwnProperty.call(data, "clientInstructions")) {
+      const raw = (data.clientInstructions ?? "").trim();
+      const current = await prisma.clinic.findUnique({
+        where: { id },
+        select: { clientInstructions: true, preset: { select: { name: true } } },
+      });
+      const changed = (current?.clientInstructions ?? "") !== (data.clientInstructions ?? "");
+      if (!raw) {
+        data.clientInstructionsCompiled = null;
+      } else if (changed) {
+        try {
+          data.clientInstructionsCompiled = await openaiService.polishClientInstructions(
+            raw,
+            presetName ?? current?.preset?.name ?? undefined
+          );
+        } catch (err) {
+          console.warn("⚠️  Falha ao polir instruções do cliente, usando texto cru:", (err as Error).message);
+          data.clientInstructionsCompiled = null;
+        }
+      }
+    }
+
+    const clinic = await prisma.clinic.update({ where: { id }, data });
     res.json(clinic);
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });

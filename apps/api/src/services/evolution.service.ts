@@ -97,7 +97,7 @@ export const evolutionService = {
   },
 
   // Resolve @lid → número real via correspondência de foto de perfil no store
-  resolveLidToPhone(instanceName: string, lid: string): string | null {
+  resolveLidByProfilePic(instanceName: string, lid: string): string | null {
     try {
       const contacts = this.readContactsStore(instanceName);
       const lidContact = contacts.find((c) => c.id === `${lid}@lid`);
@@ -114,6 +114,46 @@ export const evolutionService = {
       );
       return match ? match.id.replace("@s.whatsapp.net", "") : null;
     } catch { return null; }
+  },
+
+  // Resolve @lid → número real varrendo a store de mensagens.
+  // Em um chat 1:1 com um número real (remoteJid @s.whatsapp.net), o @lid do
+  // contato aparece como `participant` em mensagens citadas/encaminhadas. Logo,
+  // se o `<lid>@lid` consta numa mensagem cujo chat é @s.whatsapp.net, esse número é o dono do lid.
+  // Mensagens de grupo (@g.us) são ignoradas; usa voto majoritário p/ descartar vínculos espúrios.
+  resolveLidByMessages(instanceName: string, lid: string): string | null {
+    try {
+      const dir = path.join(EVOLUTION_STORE_PATH, "messages", instanceName);
+      const target = `${lid}@lid`;
+      const counts = new Map<string, number>();
+
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith(".json")) continue;
+        let raw: string;
+        try { raw = fs.readFileSync(path.join(dir, f), "utf8"); } catch { continue; }
+        if (!raw.includes(target)) continue;
+        let msg: any;
+        try { msg = JSON.parse(raw); } catch { continue; }
+        const remoteJid = msg?.key?.remoteJid;
+        if (typeof remoteJid === "string" && remoteJid.endsWith("@s.whatsapp.net")) {
+          const pn = remoteJid.replace("@s.whatsapp.net", "");
+          counts.set(pn, (counts.get(pn) ?? 0) + 1);
+        }
+      }
+
+      let best: string | null = null;
+      let bestCount = 0;
+      for (const [pn, count] of counts) {
+        if (count > bestCount) { best = pn; bestCount = count; }
+      }
+      return best;
+    } catch { return null; }
+  },
+
+  // Resolve @lid → número real: tenta foto de perfil e, em seguida, a store de mensagens
+  resolveLidToPhone(instanceName: string, lid: string): string | null {
+    return this.resolveLidByProfilePic(instanceName, lid)
+      ?? this.resolveLidByMessages(instanceName, lid);
   },
 
   // Resolve o número real a partir de um JID (incluindo @lid)

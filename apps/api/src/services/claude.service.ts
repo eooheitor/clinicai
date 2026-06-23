@@ -132,6 +132,13 @@ function normalizePhone(phone: string): string {
   return digits.slice(-11); // últimos 11 dígitos (DDD + número)
 }
 
+// Um @lid (WhatsApp Privacy ID) não é um telefone real — seus dígitos não formam
+// um número discável. Só consideramos utilizável um contactPhone sem domínio "@".
+function usableContactPhone(contactPhone: string): string | null {
+  if (!contactPhone || contactPhone.includes("@")) return null;
+  return contactPhone;
+}
+
 async function findAppointmentsByPhone(clinicId: string, phone: string) {
   const normalized = normalizePhone(phone);
   const all = await prisma.appointment.findMany({
@@ -165,9 +172,10 @@ async function handleToolCall(
       const chosen = slots.find((s) => s.start === toolInput.slot_start);
 
       // Usa o contactPhone real se disponível, senão usa o que o usuário informou
-      const patientPhone = contactPhone
-        ? contactPhone.replace(/\D/g, "").slice(-11)
-        : (toolInput.patient_phone as string).replace(/\D/g, "");
+      const usablePhone = usableContactPhone(contactPhone);
+      const patientPhone = usablePhone
+        ? usablePhone.replace(/\D/g, "").slice(-11)
+        : ((toolInput.patient_phone as string) ?? "").replace(/\D/g, "");
 
       // Google Calendar é opcional — falha não impede o agendamento
       let event: Awaited<ReturnType<typeof calendarService.createAppointment>> = null;
@@ -208,7 +216,7 @@ async function handleToolCall(
 
     case "get_patient_appointments": {
       // Usa o contactPhone real da conversa (mais confiável que o que o usuário digitou)
-      const phoneToSearch = contactPhone || (toolInput.patient_phone as string);
+      const phoneToSearch = usableContactPhone(contactPhone) || (toolInput.patient_phone as string);
       const appointments = await findAppointmentsByPhone(clinic.id, phoneToSearch);
 
       if (appointments.length === 0) {

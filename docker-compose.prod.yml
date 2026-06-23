@@ -16,6 +16,9 @@ services:
   api:
     image: clinicai-api:latest
     env_file: ./.env
+    volumes:
+      # Leitura da store do Evolution para resolver @lid → número real
+      - evolution_store:/evolution/store:ro
     networks:
       - network_public
       - clinicai_internal

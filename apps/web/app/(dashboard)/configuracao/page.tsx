@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { Field } from "@/components/field";
 import { KnowledgeDocs, type KnowledgeDoc } from "@/components/knowledge-docs";
+import { PresetPicker } from "@/components/preset-picker";
 import { cn, maskPhoneBR, localPhoneBR, toStoredPhoneBR } from "@/lib/utils";
 import {
-  Bot, Clock, Plus, X, Save, Target, Sparkles,
+  Bot, Clock, Plus, X, Save, Target,
   CalendarCheck, CalendarX, Bell, Building2, FileText, Info, Check, Plug,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +49,13 @@ interface Settings {
   googleRefreshToken: string | null;
   reminderEnabled: boolean;
   preset: { id: string; name: string; description: string | null } | null;
+  presetId: string | null;
+}
+
+interface PresetOption {
+  id: string;
+  name: string;
+  description: string | null;
 }
 
 const DAYS = [
@@ -116,6 +125,7 @@ export default function ConfiguracaoPage() {
   const [saving, setSaving] = useState(false);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDoc[]>([]);
   const [newDoc, setNewDoc] = useState("");
+  const [presets, setPresets] = useState<PresetOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [calendarIdInput, setCalendarIdInput] = useState("");
   const [savingCalendar, setSavingCalendar] = useState(false);
@@ -142,6 +152,7 @@ export default function ConfiguracaoPage() {
         googleRefreshToken: data.googleRefreshToken ?? null,
         reminderEnabled: data.reminderEnabled ?? true,
         preset: data.preset ?? null,
+        presetId: data.preset?.id ?? null,
       };
       setSettings(next);
       setBaseline(snapshot(next));
@@ -152,6 +163,7 @@ export default function ConfiguracaoPage() {
   useEffect(() => {
     loadSettings().catch((e) => setError(e.message));
     api.get<KnowledgeDoc[]>("/panel/documents").then(setKnowledgeDocs).catch(() => {});
+    api.get<PresetOption[]>("/panel/presets").then(setPresets).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -236,6 +248,11 @@ export default function ConfiguracaoPage() {
 
   async function save() {
     if (!settings) return;
+    if (!settings.presetId) {
+      toast.error("Selecione a área de atuação antes de salvar.");
+      setTab("ia");
+      return;
+    }
     setSaving(true);
     try {
       await api.patch("/panel/settings", {
@@ -368,19 +385,26 @@ export default function ConfiguracaoPage() {
               <Input id="aiName" value={settings.aiName} onChange={(e) => update("aiName", e.target.value)} placeholder="Ex: Ana, Sofia, Maria..." />
             </Field>
 
-            {settings.preset && (
-              <div className="mt-4 flex items-start gap-3 rounded-xl border border-border bg-[var(--accent-soft)] px-4 py-3">
-                <Sparkles className="mt-0.5 size-4 shrink-0 text-[var(--accent-strong)]" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    Preset ativo: <span className="text-[var(--accent-strong)]">{settings.preset.name}</span>
-                  </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    O comportamento principal da IA é gerenciado pela nossa equipe. Suas instruções abaixo complementam esse comportamento.
-                  </p>
-                </div>
+            <div className="mt-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-muted-foreground">Área de atuação</Label>
+                {!settings.presetId && (
+                  <span className="text-[11px] font-medium text-destructive">Obrigatório</span>
+                )}
               </div>
-            )}
+
+              <PresetPicker
+                presets={presets}
+                value={settings.presetId}
+                onChange={(id) => update("presetId", id)}
+              />
+
+              {!settings.presetId && (
+                <p className="text-xs leading-relaxed text-muted-foreground/70">
+                  Escolha a área que melhor descreve sua clínica — ela define o comportamento-base e o escopo de assuntos da IA. As instruções complementares abaixo ajustam os detalhes.
+                </p>
+              )}
+            </div>
 
             <Field
               label="Instruções complementares"

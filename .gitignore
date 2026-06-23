@@ -33,3 +33,7 @@ Thumbs.db
 
 # ── Next.js ───────────────────────────────────────────────────────────────────
 apps/web/next-env.d.ts
+
+# Evolution store/sessão montados em dev (não versionar)
+.evolution-store/
+.evolution-instances/
