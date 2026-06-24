@@ -82,7 +82,19 @@ function TrialBanner({ user }: { user: AuthUser }) {
 
   if (clinic.subscriptionStatus === "TRIAL" && clinic.trialEndsAt) {
     const days = differenceInDays(new Date(clinic.trialEndsAt), new Date());
-    if (days < 0) return null;
+    if (days < 0) {
+      return (
+        <div className="flex items-center justify-between gap-3 border-b border-destructive/20 bg-destructive/10 px-4 py-2.5 text-sm text-destructive sm:px-6">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>Seu período de teste expirou. Assine para continuar usando o ClinicAI.</span>
+          </div>
+          <Link href="/assinar" className="shrink-0 font-semibold underline underline-offset-2 hover:opacity-80">
+            Assinar →
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-between gap-3 border-b border-[color-mix(in_srgb,var(--warning)_22%,transparent)] bg-[var(--warning-soft)] px-4 py-2.5 text-sm text-[var(--warning)] sm:px-6">
         <div className="flex items-center gap-2">
@@ -92,10 +104,7 @@ function TrialBanner({ user }: { user: AuthUser }) {
             <strong>{days === 0 ? "hoje" : `em ${days} dia${days !== 1 ? "s" : ""}`}</strong>.
           </span>
         </div>
-        <Link
-          href="/assinar"
-          className="shrink-0 font-semibold underline underline-offset-2 hover:opacity-80"
-        >
+        <Link href="/assinar" className="shrink-0 font-semibold underline underline-offset-2 hover:opacity-80">
           Assinar →
         </Link>
       </div>

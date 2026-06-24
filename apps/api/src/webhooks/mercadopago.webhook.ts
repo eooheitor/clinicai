@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../database/prisma";
 import { mpService } from "../services/mp.service";
+import { emailService } from "../services/email.service";
 
 export async function mercadopagoWebhookHandler(req: Request, res: Response) {
   res.sendStatus(200);
@@ -31,6 +32,15 @@ export async function mercadopagoWebhookHandler(req: Request, res: Response) {
       });
 
       console.log(`💳 Pagamento aprovado: ${clinic.name} → ACTIVE até ${expiresAt.toLocaleDateString("pt-BR")}`);
+
+      const owner = await prisma.user.findFirst({
+        where: { clinicId, role: "CLINIC" },
+        select: { email: true, name: true },
+      });
+      if (owner) {
+        emailService.sendPaymentConfirmationEmail({ to: owner.email, name: owner.name, clinicName: clinic.name, expiresAt })
+          .catch((err) => console.error("Erro ao enviar email de confirmação:", err));
+      }
     } else if (payment.status === "rejected" || payment.status === "cancelled") {
       await prisma.clinic.update({
         where: { id: clinicId },

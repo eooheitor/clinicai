@@ -71,7 +71,7 @@ export default function AssinarPage() {
             <div className="surface elevate-lg rounded-2xl p-7">
               <div className="text-center">
                 <div className="flex items-end justify-center gap-1.5">
-                  <span className="font-display text-5xl font-semibold tracking-[-0.03em] text-foreground">R$150</span>
+                  <span className="font-display text-5xl font-semibold tracking-[-0.03em] text-foreground">R$79,90</span>
                   <span className="mb-2 text-muted-foreground">/mês</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">Cartão, PIX ou boleto — sem precisar de conta no Mercado Pago</p>

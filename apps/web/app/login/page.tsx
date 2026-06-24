@@ -57,17 +57,24 @@ export default function LoginPage() {
             autoComplete="email"
           />
         </Field>
-        <Field label="Senha" htmlFor="password">
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required
-            autoComplete="current-password"
-          />
-        </Field>
+        <div className="space-y-1">
+          <Field label="Senha" htmlFor="password">
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+              autoComplete="current-password"
+            />
+          </Field>
+          <div className="text-right">
+            <Link href="/recuperar-senha" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+              Esqueceu sua senha?
+            </Link>
+          </div>
+        </div>
 
         {error && (
           <p className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">

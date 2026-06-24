@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, MessageSquare, Users, Calendar, Settings, Smartphone,
-  LogOut, BotMessageSquare, Building2, UserCircle, Sparkles, type LucideIcon,
+  LogOut, BotMessageSquare, Building2, UserCircle, Sparkles, BarChart3, type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn, getInitials } from "@/lib/utils";
@@ -22,6 +22,7 @@ export interface NavItem {
 export function navItemsFor(role: string | undefined, humanCount: number): NavItem[] {
   if (role === "MASTER") {
     return [
+      { href: "/master/analytics", icon: BarChart3, label: "Analytics", badge: 0 },
       { href: "/master", icon: Building2, label: "Clientes", badge: 0 },
       { href: "/master/presets", icon: Sparkles, label: "Presets de IA", badge: 0 },
       { href: "/usuarios", icon: UserCircle, label: "Usuários", badge: 0 },

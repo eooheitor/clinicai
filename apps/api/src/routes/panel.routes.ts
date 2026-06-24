@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../database/prisma";
 import { authMiddleware, requireMaster } from "../middleware/auth.middleware";
+import { subscriptionMiddleware } from "../middleware/subscription.middleware";
 import { evolutionService } from "../services/evolution.service";
 import { calendarService } from "../services/calendar.service";
 import { mpService } from "../services/mp.service";
@@ -15,6 +16,11 @@ const MAX_DOCS_PER_CLINIC = 5;
 
 const router = Router();
 router.use(authMiddleware);
+// Bloqueio de acesso para trials expirados/suspensos — exceto rotas de assinatura e master
+router.use((req, res, next) => {
+  if (req.path.startsWith("/subscription") || req.path.startsWith("/master")) return next();
+  return subscriptionMiddleware(req, res, next);
+});
 router.use("/master/presets", requireMaster, presetRoutes);
 
 // Helper: garante que o usuário só acessa sua própria clínica
@@ -424,6 +430,78 @@ router.patch("/appointments/:id/cancel", async (req, res) => {
     });
     res.json({ ok: true });
   } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// ── Master: analytics ────────────────────────────────────────────────────────
+
+router.get("/master/analytics", requireMaster, async (_req, res) => {
+  const MONTHLY_PRICE = 79.9;
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
+  const sevenDaysLater = new Date(now); sevenDaysLater.setDate(now.getDate() + 3);
+
+  const [breakdown, allClinics, trialsExpiring, recentSignups, totalConversations, conversationsRecent, totalAppointments, appointmentsRecent] =
+    await Promise.all([
+      prisma.clinic.groupBy({ by: ["subscriptionStatus"], _count: { id: true } }),
+      prisma.clinic.findMany({ where: { createdAt: { gte: thirtyDaysAgo } }, select: { createdAt: true }, orderBy: { createdAt: "asc" } }),
+      prisma.clinic.findMany({
+        where: { subscriptionStatus: "TRIAL", trialEndsAt: { gte: now, lte: sevenDaysLater } },
+        select: { id: true, name: true, trialEndsAt: true },
+        orderBy: { trialEndsAt: "asc" },
+      }),
+      prisma.clinic.findMany({
+        select: { id: true, name: true, subscriptionStatus: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+      prisma.conversation.count(),
+      prisma.conversation.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+      prisma.appointment.count(),
+      prisma.appointment.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    ]);
+
+  const countByStatus = (status: string) =>
+    breakdown.find((b) => b.subscriptionStatus === status)?._count.id ?? 0;
+
+  const activeClinics = countByStatus("ACTIVE");
+
+  // Agrupa novos cadastros por dia (últimos 30 dias)
+  const dayMap: Record<string, number> = {};
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(thirtyDaysAgo);
+    d.setDate(thirtyDaysAgo.getDate() + i);
+    dayMap[d.toISOString().slice(0, 10)] = 0;
+  }
+  for (const c of allClinics) {
+    const key = c.createdAt.toISOString().slice(0, 10);
+    if (key in dayMap) dayMap[key]++;
+  }
+  const newClinicsLast30Days = Object.entries(dayMap).map(([date, count]) => ({ date, count }));
+
+  res.json({
+    overview: {
+      totalClinics: breakdown.reduce((s, b) => s + b._count.id, 0),
+      activeClinics,
+      trialClinics: countByStatus("TRIAL"),
+      suspendedClinics: countByStatus("SUSPENDED"),
+      cancelledClinics: countByStatus("CANCELLED"),
+      estimatedMRR: activeClinics * MONTHLY_PRICE,
+    },
+    subscriptionBreakdown: ["ACTIVE", "TRIAL", "SUSPENDED", "CANCELLED"].map((status) => ({
+      status,
+      count: countByStatus(status),
+    })),
+    newClinicsLast30Days,
+    trialsExpiringSoon: trialsExpiring,
+    recentSignups,
+    engagement: {
+      totalConversations,
+      conversationsLast7Days: conversationsRecent,
+      totalAppointments,
+      appointmentsLast7Days: appointmentsRecent,
+    },
+  });
 });
 
 // ── Master: gerenciar clínicas e usuários ────────────────────────────────────
