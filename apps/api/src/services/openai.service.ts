@@ -4,6 +4,7 @@ import { config } from "../config";
 import { calendarService } from "./calendar.service";
 import { prisma } from "../database/prisma";
 import { buildSystemPrompt, ClinicForPrompt } from "./prompt.builder";
+import { normalizePhone, usableContactPhone } from "../utils/phone";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br";
 
@@ -109,17 +110,6 @@ const triagemTools: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return digits.slice(-11);
-}
-
-// Um @lid (WhatsApp Privacy ID) não é um telefone real — seus dígitos não formam
-// um número discável. Só consideramos utilizável um contactPhone sem domínio "@".
-function usableContactPhone(contactPhone: string): string | null {
-  if (!contactPhone || contactPhone.includes("@")) return null;
-  return contactPhone;
-}
 
 async function findAppointmentsByPhone(clinicId: string, phone: string) {
   const normalized = normalizePhone(phone);
