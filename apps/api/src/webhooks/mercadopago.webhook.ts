@@ -1,9 +1,41 @@
 import { Request, Response } from "express";
+import { createHmac } from "crypto";
 import { prisma } from "../database/prisma";
 import { mpService } from "../services/mp.service";
 import { emailService } from "../services/email.service";
 
+function verifyMpSignature(req: Request): boolean {
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  // Em dev sem secret configurado, deixa passar (mas loga aviso)
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") return false;
+    console.warn("⚠️  MP_WEBHOOK_SECRET não configurado — verificação ignorada em dev");
+    return true;
+  }
+
+  const xSignature = req.headers["x-signature"] as string;
+  const xRequestId = req.headers["x-request-id"] as string;
+  if (!xSignature || !xRequestId) return false;
+
+  // x-signature: "ts=<timestamp>,v1=<hmac>"
+  const parts = Object.fromEntries(xSignature.split(",").map((p) => p.split("=")));
+  const ts = parts["ts"];
+  const v1 = parts["v1"];
+  if (!ts || !v1) return false;
+
+  const dataId = req.body?.data?.id;
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  const expected = createHmac("sha256", secret).update(manifest).digest("hex");
+
+  return expected === v1;
+}
+
 export async function mercadopagoWebhookHandler(req: Request, res: Response) {
+  if (!verifyMpSignature(req)) {
+    res.sendStatus(401);
+    return;
+  }
+
   res.sendStatus(200);
 
   const { type, data } = req.body;

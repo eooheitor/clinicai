@@ -29,6 +29,7 @@ const envSchema = z.object({
   TRIAL_DAYS: z.coerce.number().default(3),
   FROM_EMAIL: z.string().default("onboarding@resend.dev"),
   MP_ACCESS_TOKEN: z.string().default(""),
+  MP_WEBHOOK_SECRET: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
