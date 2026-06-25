@@ -1,5 +1,6 @@
 import "./config";
 import express from "express";
+import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { evolutionWebhookHandler } from "./webhooks/evolution.webhook";
@@ -13,6 +14,9 @@ import { startTrialExpiryJob } from "./jobs/trial-expiry.job";
 
 const app = express();
 
+// Confia no primeiro proxy (Traefik em produção) para req.ip real — necessário para rate limit funcionar
+app.set("trust proxy", 1);
+app.use(helmet());
 app.use(express.json({ limit: "5mb" }));
 app.use((_req, res, next) => {
   res.header("Access-Control-Allow-Origin", process.env.WEB_URL || "http://localhost:3000");
