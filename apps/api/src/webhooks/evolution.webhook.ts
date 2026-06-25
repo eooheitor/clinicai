@@ -111,6 +111,15 @@ export async function evolutionWebhookHandler(
   req: Request,
   res: Response
 ): Promise<void> {
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (secret) {
+    const token = req.query.token as string | undefined;
+    if (token !== secret) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+  }
+
   res.status(200).json({ ok: true });
 
   const body = req.body;

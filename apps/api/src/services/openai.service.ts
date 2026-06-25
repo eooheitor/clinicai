@@ -4,6 +4,7 @@ import { config } from "../config";
 import { calendarService } from "./calendar.service";
 import { prisma } from "../database/prisma";
 import { buildSystemPrompt, ClinicForPrompt } from "./prompt.builder";
+import { normalizePhone, usableContactPhone } from "../utils/phone";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br";
 
@@ -109,10 +110,6 @@ const triagemTools: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return digits.slice(-11);
-}
 
 async function findAppointmentsByPhone(clinicId: string, phone: string) {
   const normalized = normalizePhone(phone);
@@ -143,9 +140,10 @@ async function handleToolCall(
       const slots = await calendarService.getAvailableSlots(clinic, 14);
       const chosen = slots.find((s) => s.start === toolInput.slot_start);
 
-      const patientPhone = contactPhone
-        ? contactPhone.replace(/\D/g, "").slice(-11)
-        : (toolInput.patient_phone as string).replace(/\D/g, "");
+      const usablePhone = usableContactPhone(contactPhone);
+      const patientPhone = usablePhone
+        ? usablePhone.replace(/\D/g, "").slice(-11)
+        : ((toolInput.patient_phone as string) ?? "").replace(/\D/g, "");
 
       let event: Awaited<ReturnType<typeof calendarService.createAppointment>> = null;
       try {
@@ -184,7 +182,7 @@ async function handleToolCall(
     }
 
     case "get_patient_appointments": {
-      const phoneToSearch = contactPhone || (toolInput.patient_phone as string);
+      const phoneToSearch = usableContactPhone(contactPhone) || (toolInput.patient_phone as string);
       const appointments = await findAppointmentsByPhone(clinic.id, phoneToSearch);
       if (appointments.length === 0) return "Nenhum agendamento futuro encontrado para este paciente.";
       const list = appointments
@@ -310,5 +308,36 @@ export const openaiService = {
     }
 
     return response.choices[0].message.content ?? "";
+  },
+
+  // Reescreve as instruções livres do cliente num texto claro e organizado, sem
+  // alterar a intenção/fatos e sem introduzir regras de escopo ou comportamento de
+  // área (isso é definido pelo preset). Lança em erro — o chamador faz fallback.
+  async polishClientInstructions(raw: string, presetName?: string): Promise<string> {
+    const areaContext = presetName
+      ? `A clínica atua na área de ${presetName}; o comportamento e o escopo dessa área já são definidos separadamente, então NÃO os repita aqui.`
+      : "";
+
+    const response = await openai.chat.completions.create({
+      model: config.OPENAI_MODEL,
+      max_tokens: 600,
+      messages: [
+        {
+          role: "system",
+          content: `Você reescreve instruções de atendimento escritas por donos de clínica para uma IA atendente. Reescreva o texto do usuário de forma clara, organizada e objetiva, em português brasileiro.
+Regras:
+- Mantenha 100% da intenção, preferências e fatos do texto original.
+- Não adicione regras, serviços, valores ou políticas que não estejam no texto.
+- Não inclua escopo de atendimento, identidade da IA nem comportamento da área — isso é definido em outro lugar. ${areaContext}
+- Não use marcação (sem asteriscos, hashtags ou markdown). Texto corrido ou frases curtas.
+- Retorne apenas o texto reescrito, sem comentários.`,
+        },
+        { role: "user", content: raw },
+      ],
+    });
+
+    const polished = response.choices[0].message.content?.trim();
+    if (!polished) throw new Error("Polimento retornou vazio");
+    return polished;
   },
 };

@@ -1,5 +1,7 @@
 import "./config";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { evolutionWebhookHandler } from "./webhooks/evolution.webhook";
 import { mercadopagoWebhookHandler } from "./webhooks/mercadopago.webhook";
@@ -12,13 +14,32 @@ import { startTrialExpiryJob } from "./jobs/trial-expiry.job";
 
 const app = express();
 
+// Confia no primeiro proxy (Traefik em produção) para req.ip real — necessário para rate limit funcionar
+app.set("trust proxy", 1);
+app.use(helmet());
 app.use(express.json({ limit: "5mb" }));
 app.use((_req, res, next) => {
-  res.header("Access-Control-Allow-Origin", process.env.WEB_URL || "http://localhost:3002");
+  res.header("Access-Control-Allow-Origin", process.env.WEB_URL || "http://localhost:3000");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   if (_req.method === "OPTIONS") { res.sendStatus(200); return; }
   next();
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Limite de cadastros atingido. Tente novamente em 1 hora." },
 });
 
 app.get("/health", (_req, res) => {
@@ -28,6 +49,8 @@ app.get("/health", (_req, res) => {
 app.post("/webhook/:instance", evolutionWebhookHandler);
 app.post("/webhooks/mercadopago", mercadopagoWebhookHandler);
 app.use("/admin", adminRouter);
+app.post("/auth/login", authLimiter);
+app.post("/auth/register", registerLimiter);
 app.use("/auth", authRouter);
 app.use("/panel", panelRouter);
 

@@ -8,6 +8,11 @@ import { sendReminders } from "../jobs/reminder.job";
 
 const router = Router();
 
+function safeError(err: any): string {
+  if (typeof err?.code === "string" && err.code.startsWith("P")) return "Operação inválida";
+  return err?.message ?? "Erro interno";
+}
+
 // Middleware de autenticação simples por API key
 function adminAuth(req: Request, res: Response, next: NextFunction): void {
   const key = req.headers["x-admin-key"];
@@ -137,10 +142,16 @@ router.get("/clinics/:id", async (req, res) => {
 
 // Atualizar clínica
 router.patch("/clinics/:id", async (req, res) => {
-  const clinic = await prisma.clinic.update({
-    where: { id: req.params.id },
-    data: req.body,
-  });
+  const allowed = [
+    "name", "slug", "evolutionInstance", "aiName", "services",
+    "workingHours", "appointmentDuration", "calendarId", "active",
+    "adminPhone", "phone", "companyInfo", "aiObjective",
+    "clientInstructions", "reminderEnabled", "presetId",
+  ];
+  const data = Object.fromEntries(
+    Object.entries(req.body).filter(([k]) => allowed.includes(k))
+  );
+  const clinic = await prisma.clinic.update({ where: { id: req.params.id }, data });
   res.json(clinic);
 });
 

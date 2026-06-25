@@ -8,6 +8,7 @@ import { config } from "../config";
 import { calendarService } from "./calendar.service";
 import { prisma } from "../database/prisma";
 import { buildSystemPrompt, ClinicForPrompt } from "./prompt.builder";
+import { normalizePhone, usableContactPhone } from "../utils/phone";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br";
 
@@ -126,11 +127,6 @@ const triagemTools: Anthropic.Tool[] = [
   },
 ];
 
-// Normaliza telefone: remove tudo que não é dígito, pega os últimos 11 dígitos
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return digits.slice(-11); // últimos 11 dígitos (DDD + número)
-}
 
 async function findAppointmentsByPhone(clinicId: string, phone: string) {
   const normalized = normalizePhone(phone);
@@ -165,9 +161,10 @@ async function handleToolCall(
       const chosen = slots.find((s) => s.start === toolInput.slot_start);
 
       // Usa o contactPhone real se disponível, senão usa o que o usuário informou
-      const patientPhone = contactPhone
-        ? contactPhone.replace(/\D/g, "").slice(-11)
-        : (toolInput.patient_phone as string).replace(/\D/g, "");
+      const usablePhone = usableContactPhone(contactPhone);
+      const patientPhone = usablePhone
+        ? usablePhone.replace(/\D/g, "").slice(-11)
+        : ((toolInput.patient_phone as string) ?? "").replace(/\D/g, "");
 
       // Google Calendar é opcional — falha não impede o agendamento
       let event: Awaited<ReturnType<typeof calendarService.createAppointment>> = null;
@@ -208,7 +205,7 @@ async function handleToolCall(
 
     case "get_patient_appointments": {
       // Usa o contactPhone real da conversa (mais confiável que o que o usuário digitou)
-      const phoneToSearch = contactPhone || (toolInput.patient_phone as string);
+      const phoneToSearch = usableContactPhone(contactPhone) || (toolInput.patient_phone as string);
       const appointments = await findAppointmentsByPhone(clinic.id, phoneToSearch);
 
       if (appointments.length === 0) {
