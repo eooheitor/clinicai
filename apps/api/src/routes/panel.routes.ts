@@ -15,6 +15,12 @@ import { z } from "zod";
 
 const MAX_DOCS_PER_CLINIC = 5;
 
+// Erros do Prisma (código P####) não devem vazar detalhes do schema
+function safeError(err: any): string {
+  if (typeof err?.code === "string" && err.code.startsWith("P")) return "Operação inválida";
+  return err?.message ?? "Erro interno";
+}
+
 const router = Router();
 router.use(authMiddleware);
 // Bloqueio de acesso para trials expirados/suspensos — exceto rotas de assinatura e master
@@ -101,7 +107,7 @@ router.get("/dashboard", async (req, res) => {
       messagesLast7Days: last7.map((r) => ({ day: r.day, count: Number(r.count) })),
     });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: safeError(err) });
   }
 });
 
@@ -116,7 +122,7 @@ router.get("/presets", async (_req, res) => {
       orderBy: { name: "asc" },
     });
     res.json(presets);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.get("/settings", async (req, res) => {
@@ -133,8 +139,9 @@ router.get("/settings", async (req, res) => {
       },
     });
     if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
-    res.json(clinic);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+    const { googleRefreshToken, ...safe } = clinic;
+    res.json({ ...safe, calendarConnected: !!googleRefreshToken });
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.patch("/settings", async (req, res) => {
@@ -182,9 +189,20 @@ router.patch("/settings", async (req, res) => {
       }
     }
 
-    const clinic = await prisma.clinic.update({ where: { id }, data });
+    const clinic = await prisma.clinic.update({
+      where: { id },
+      data,
+      select: {
+        id: true, name: true, slug: true, phone: true,
+        aiName: true, clientInstructions: true, services: true, requiredDocs: true, companyInfo: true,
+        workingHours: true, appointmentDuration: true,
+        adminPhone: true, active: true, evolutionInstance: true, aiObjective: true,
+        calendarId: true, reminderEnabled: true, presetId: true,
+        preset: { select: { id: true, name: true, description: true } },
+      },
+    });
     res.json(clinic);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Documentos de conhecimento da própria clínica ────────────────────────────
@@ -197,12 +215,12 @@ router.get("/documents", async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
     res.json(docs);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.post("/documents", uploadSingleFile, async (req, res) => {
   try { await uploadClinicDocument(clinicId(req), req, res); }
-  catch (err: any) { res.status(400).json({ error: err.message }); }
+  catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.delete("/documents/:docId", async (req, res) => {
@@ -212,7 +230,7 @@ router.delete("/documents/:docId", async (req, res) => {
     });
     if (count === 0) { res.status(404).json({ error: "Documento não encontrado" }); return; }
     res.status(204).end();
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Google Calendar (configurações da própria clínica) ───────────────────────
@@ -241,7 +259,7 @@ router.get("/whatsapp/status", async (req, res) => {
       state: status?.instance?.state ?? status?.state ?? "close",
       instanceName: clinic.evolutionInstance,
     });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.get("/whatsapp/qrcode", async (req, res) => {
@@ -250,7 +268,7 @@ router.get("/whatsapp/qrcode", async (req, res) => {
     if (!clinic) { res.status(404).json({ error: "Clínica não encontrada" }); return; }
     const qr = await evolutionService.getQRCode(clinic.evolutionInstance);
     res.json({ qrcode: qr.base64 ?? qr.qrcode ?? qr.code ?? null });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Conversas ────────────────────────────────────────────────────────────────
@@ -259,7 +277,8 @@ router.get("/conversations", async (req, res) => {
   try {
     const { search, humanMode, triagemCompleta, page = "1" } = req.query;
     const take = 20;
-    const skip = (Number(page) - 1) * take;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const skip = (pageNum - 1) * take;
 
     const where: any = { clinicId: clinicId(req) };
     if (humanMode === "true") where.humanMode = true;
@@ -286,7 +305,7 @@ router.get("/conversations", async (req, res) => {
     ]);
 
     res.json({ conversations, total, pages: Math.ceil(total / take) });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.get("/conversations/:id", async (req, res) => {
@@ -299,7 +318,7 @@ router.get("/conversations/:id", async (req, res) => {
     });
     if (!conv) { res.status(404).json({ error: "Não encontrada" }); return; }
     res.json(conv);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.post("/conversations/:id/send", async (req, res) => {
@@ -319,7 +338,7 @@ router.post("/conversations/:id/send", async (req, res) => {
 
     await evolutionService.sendText(conv.clinic.evolutionInstance, conv.contactPhone, text.trim());
     res.json({ ok: true });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.patch("/conversations/:id/concluir-triagem", async (req, res) => {
@@ -329,7 +348,7 @@ router.patch("/conversations/:id/concluir-triagem", async (req, res) => {
       data: { triagemCompleta: true, triagemCompletaAt: new Date() },
     });
     res.json({ ok: true });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.patch("/conversations/:id/pausar-ia", async (req, res) => {
@@ -339,7 +358,7 @@ router.patch("/conversations/:id/pausar-ia", async (req, res) => {
       data: { humanMode: true, humanModeActivatedAt: new Date() },
     });
     res.json({ ok: true });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.patch("/conversations/:id/reativar-ia", async (req, res) => {
@@ -349,7 +368,7 @@ router.patch("/conversations/:id/reativar-ia", async (req, res) => {
       data: { humanMode: false, humanModeActivatedAt: null },
     });
     res.json({ ok: true });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Clientes / Pacientes ─────────────────────────────────────────────────────
@@ -358,7 +377,8 @@ router.get("/patients", async (req, res) => {
   try {
     const { search, page = "1" } = req.query;
     const take = 20;
-    const skip = (Number(page) - 1) * take;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const skip = (pageNum - 1) * take;
 
     const where: any = { clinicId: clinicId(req) };
     if (search) {
@@ -382,7 +402,7 @@ router.get("/patients", async (req, res) => {
     ]);
 
     res.json({ patients, total, pages: Math.ceil(total / take) });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Agendamentos ─────────────────────────────────────────────────────────────
@@ -403,10 +423,11 @@ router.get("/appointments", async (req, res) => {
       where.scheduledAt = { gte: new Date() };
     }
 
-    // Em consultas por intervalo/telefone retornamos tudo; senão paginamos
+    // Em consultas por intervalo/telefone retornamos até 200; senão paginamos
     const ranged = Boolean(from || to || phone);
-    const take = ranged ? 1000 : 20;
-    const skip = ranged ? 0 : (Number(page) - 1) * take;
+    const take = ranged ? 200 : 20;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const skip = ranged ? 0 : (pageNum - 1) * take;
 
     const [appointments, total] = await Promise.all([
       prisma.appointment.findMany({
@@ -419,7 +440,7 @@ router.get("/appointments", async (req, res) => {
     ]);
 
     res.json({ appointments, total, pages: Math.ceil(total / take) });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // Criação manual de agendamento (painel)
@@ -470,7 +491,7 @@ router.post("/appointments", async (req, res) => {
       },
     });
     res.status(201).json(appointment);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.patch("/appointments/:id/cancel", async (req, res) => {
@@ -480,7 +501,7 @@ router.patch("/appointments/:id/cancel", async (req, res) => {
       data: { status: "CANCELLED" },
     });
     res.json({ ok: true });
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 // ── Master: analytics ────────────────────────────────────────────────────────
@@ -579,13 +600,19 @@ router.post("/master/clinics", requireMaster, async (req, res) => {
     }
 
     res.status(201).json(clinic);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.get("/master/clinics", requireMaster, async (_req, res) => {
   const clinics = await prisma.clinic.findMany({
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { conversations: true, appointments: true } } },
+    select: {
+      id: true, name: true, slug: true, evolutionInstance: true, active: true,
+      subscriptionStatus: true, trialEndsAt: true, subscriptionExpiresAt: true,
+      createdAt: true, presetId: true,
+      preset: { select: { id: true, name: true } },
+      _count: { select: { conversations: true, appointments: true } },
+    },
   });
   res.json(clinics);
 });
@@ -593,7 +620,11 @@ router.get("/master/clinics", requireMaster, async (_req, res) => {
 router.patch("/master/clinics/:clinicId", requireMaster, async (req, res) => {
   const { active } = req.body;
   if (typeof active !== "boolean") { res.status(400).json({ error: "Campo 'active' obrigatório" }); return; }
-  const clinic = await prisma.clinic.update({ where: { id: req.params.clinicId }, data: { active } });
+  const clinic = await prisma.clinic.update({
+    where: { id: req.params.clinicId },
+    data: { active },
+    select: { id: true, name: true, active: true },
+  });
   res.json(clinic);
 });
 
@@ -667,7 +698,7 @@ router.patch("/master/clinics/:clinicId/ai-config", requireMaster, async (req, r
       select: { id: true, presetId: true, adminPrompt: true },
     });
     res.json(clinic);
-  } catch (err: any) { res.status(400).json({ error: err.message }); }
+  } catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 async function uploadClinicDocument(cId: string, req: any, res: any) {
@@ -682,7 +713,7 @@ async function uploadClinicDocument(cId: string, req: any, res: any) {
 
 router.post("/master/clinics/:clinicId/documents", requireMaster, uploadSingleFile, async (req, res) => {
   try { await uploadClinicDocument(req.params.clinicId as string, req, res); }
-  catch (err: any) { res.status(400).json({ error: err.message }); }
+  catch (err: any) { res.status(400).json({ error: safeError(err) }); }
 });
 
 router.delete("/master/clinics/:clinicId/documents/:docId", requireMaster, async (req, res) => {

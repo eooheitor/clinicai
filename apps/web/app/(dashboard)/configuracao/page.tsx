@@ -46,7 +46,7 @@ interface Settings {
   phone: string;
   aiObjective: "agendamento" | "triagem";
   calendarId: string | null;
-  googleRefreshToken: string | null;
+  calendarConnected: boolean;
   reminderEnabled: boolean;
   preset: { id: string; name: string; description: string | null } | null;
   presetId: string | null;
@@ -75,7 +75,7 @@ const DEFAULT_HOURS: WorkingHours = Object.fromEntries(
 const wrap = "px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8";
 
 function snapshot(s: Settings) {
-  const { calendarId, googleRefreshToken, preset, ...tracked } = s;
+  const { calendarId, calendarConnected, preset, ...tracked } = s;
   return JSON.stringify(tracked);
 }
 
@@ -149,7 +149,7 @@ export default function ConfiguracaoPage() {
         companyInfo: data.companyInfo ?? "",
         aiObjective: data.aiObjective ?? "agendamento",
         calendarId: data.calendarId ?? null,
-        googleRefreshToken: data.googleRefreshToken ?? null,
+        calendarConnected: data.calendarConnected ?? false,
         reminderEnabled: data.reminderEnabled ?? true,
         preset: data.preset ?? null,
         presetId: data.preset?.id ?? null,
@@ -595,12 +595,12 @@ export default function ConfiguracaoPage() {
           </SectionCard>
 
           <SectionCard
-            icon={settings.googleRefreshToken ? CalendarCheck : CalendarX}
+            icon={settings.calendarConnected ? CalendarCheck : CalendarX}
             title="Google Calendar"
             description="Conecte sua conta Google para que os agendamentos apareçam no seu calendário."
           >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
-              {settings.googleRefreshToken ? (
+              {settings.calendarConnected ? (
                 <span className="flex items-center gap-2 text-sm font-medium text-[var(--accent-strong)]">
                   <CalendarCheck className="size-4" /> Conta Google conectada
                 </span>
@@ -610,7 +610,7 @@ export default function ConfiguracaoPage() {
                 </span>
               )}
               <Button variant="outline" size="sm" onClick={connectGoogle}>
-                {settings.googleRefreshToken ? "Reconectar" : "Conectar conta Google"}
+                {settings.calendarConnected ? "Reconectar" : "Conectar conta Google"}
               </Button>
             </div>
 
