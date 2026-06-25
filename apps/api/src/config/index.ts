@@ -30,6 +30,7 @@ const envSchema = z.object({
   FROM_EMAIL: z.string().default("onboarding@resend.dev"),
   MP_ACCESS_TOKEN: z.string().default(""),
   MP_WEBHOOK_SECRET: z.string().default(""),
+  EVOLUTION_WEBHOOK_SECRET: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
