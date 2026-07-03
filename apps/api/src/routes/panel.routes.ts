@@ -241,6 +241,21 @@ router.get("/settings/google/auth-url", async (req, res) => {
   res.json({ url });
 });
 
+router.get("/settings/google/calendars", async (req, res) => {
+  const clinic = await prisma.clinic.findUnique({ where: { id: clinicId(req) } });
+  if (!clinic?.googleRefreshToken) {
+    res.status(400).json({ error: "Conta Google não conectada" });
+    return;
+  }
+  try {
+    const calendars = await calendarService.listCalendars(clinic);
+    res.json(calendars);
+  } catch (err: any) {
+    console.error("Erro ao listar agendas do Google:", err?.message);
+    res.status(502).json({ error: "Não foi possível carregar as agendas do Google" });
+  }
+});
+
 router.patch("/settings/calendar-id", async (req, res) => {
   const { calendarId: cid } = req.body;
   if (!cid) { res.status(400).json({ error: "calendarId obrigatório" }); return; }
