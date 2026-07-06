@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Caveat, Fraunces, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -22,6 +22,12 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
+const hand = Caveat({
+  variable: "--font-hand",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "ClinicAI",
   description: "ClinicAI — Atendimento inteligente via WhatsApp",
@@ -35,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
+      className={`${display.variable} ${sans.variable} ${mono.variable} ${hand.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="grain min-h-full flex flex-col">
