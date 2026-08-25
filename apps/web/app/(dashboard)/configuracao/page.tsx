@@ -58,6 +58,12 @@ interface PresetOption {
   description: string | null;
 }
 
+interface GoogleCalendar {
+  id: string;
+  summary: string;
+  primary: boolean;
+}
+
 const DAYS = [
   { key: "monday", label: "Segunda" },
   { key: "tuesday", label: "Terça" },
@@ -129,6 +135,9 @@ export default function ConfiguracaoPage() {
   const [error, setError] = useState<string | null>(null);
   const [calendarIdInput, setCalendarIdInput] = useState("");
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+  const [manualCalendar, setManualCalendar] = useState(false);
   const [tab, setTab] = useState<"negocio" | "ia" | "docs" | "horarios" | "integracoes">("negocio");
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -185,6 +194,27 @@ export default function ConfiguracaoPage() {
       toast.error(err.message);
     }
   }
+
+  async function loadCalendars() {
+    setLoadingCalendars(true);
+    try {
+      const list = await api.get<GoogleCalendar[]>("/panel/settings/google/calendars");
+      setCalendars(list);
+      if (list.length === 0) setManualCalendar(true);
+    } catch {
+      setManualCalendar(true);
+    } finally {
+      setLoadingCalendars(false);
+    }
+  }
+
+  useEffect(() => {
+    if (settings?.calendarConnected) loadCalendars();
+    else {
+      setCalendars([]);
+      setManualCalendar(false);
+    }
+  }, [settings?.calendarConnected]);
 
   async function saveCalendarId() {
     if (!calendarIdInput.trim()) {
@@ -614,20 +644,74 @@ export default function ConfiguracaoPage() {
               </Button>
             </div>
 
-            <Field label="ID da agenda" htmlFor="calendarId" className="mt-4" hint="Crie uma agenda no Google Calendar e copie o ID dela (ex: nome@group.calendar.google.com). Use “primary” para a agenda principal.">
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  id="calendarId"
-                  className="font-mono text-sm"
-                  placeholder="nome@group.calendar.google.com"
-                  value={calendarIdInput}
-                  onChange={(e) => setCalendarIdInput(e.target.value)}
-                />
-                <Button onClick={saveCalendarId} disabled={savingCalendar} className="shrink-0">
-                  {savingCalendar ? "Salvando..." : "Salvar ID"}
-                </Button>
-              </div>
-            </Field>
+            {!settings.calendarConnected ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Conecte sua conta Google para escolher a agenda a ser usada.
+              </p>
+            ) : (
+              <Field
+                label="Agenda utilizada"
+                htmlFor="calendarId"
+                className="mt-4"
+                hint="Selecione a agenda do Google Calendar onde os agendamentos serão criados."
+              >
+                {loadingCalendars ? (
+                  <p className="text-sm text-muted-foreground">Carregando agendas…</p>
+                ) : manualCalendar ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="calendarId"
+                      className="font-mono text-sm"
+                      placeholder="nome@group.calendar.google.com"
+                      value={calendarIdInput}
+                      onChange={(e) => setCalendarIdInput(e.target.value)}
+                    />
+                    <Button onClick={saveCalendarId} disabled={savingCalendar} className="shrink-0">
+                      {savingCalendar ? "Salvando..." : "Salvar ID"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select
+                      id="calendarId"
+                      className="h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-1 text-base shadow-[var(--shadow-sm)] outline-none transition-[color,box-shadow,border-color] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35 md:text-sm dark:bg-input/20"
+                      value={calendarIdInput}
+                      onChange={(e) => setCalendarIdInput(e.target.value)}
+                    >
+                      <option value="" disabled>
+                        Selecione uma agenda…
+                      </option>
+                      {calendarIdInput &&
+                        !calendars.some((c) => c.id === calendarIdInput) && (
+                          <option value={calendarIdInput}>{calendarIdInput} (atual)</option>
+                        )}
+                      {calendars.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.summary}
+                          {c.primary ? " (principal)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      onClick={saveCalendarId}
+                      disabled={savingCalendar || !calendarIdInput}
+                      className="shrink-0"
+                    >
+                      {savingCalendar ? "Salvando..." : "Salvar"}
+                    </Button>
+                  </div>
+                )}
+                {!loadingCalendars && (
+                  <button
+                    type="button"
+                    onClick={() => setManualCalendar((v) => !v)}
+                    className="mt-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    {manualCalendar ? "Escolher da lista" : "Digitar o ID manualmente"}
+                  </button>
+                )}
+              </Field>
+            )}
             {settings.calendarId && (
               <p className="mt-2 text-xs text-muted-foreground">
                 Agenda atual: <span className="font-mono">{settings.calendarId}</span>

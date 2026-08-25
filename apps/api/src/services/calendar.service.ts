@@ -58,6 +58,23 @@ export const calendarService = {
     return tokens;
   },
 
+  async listCalendars(
+    clinic: Clinic
+  ): Promise<{ id: string; summary: string; primary: boolean }[]> {
+    if (!clinic.googleRefreshToken) return [];
+    const auth = getOAuthClient(clinic);
+    const calendar = google.calendar({ version: "v3", auth });
+    const { data } = await calendar.calendarList.list({ maxResults: 250 });
+    return (data.items ?? [])
+      .filter((c) => !!c.id && c.accessRole !== "freeBusyReader")
+      .map((c) => ({
+        id: c.id!,
+        summary: c.summaryOverride ?? c.summary ?? c.id!,
+        primary: !!c.primary,
+      }))
+      .sort((a, b) => Number(b.primary) - Number(a.primary));
+  },
+
   async getAvailableSlots(
     clinic: Clinic,
     daysAhead = 7
