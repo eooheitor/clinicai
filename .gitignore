@@ -37,3 +37,8 @@ apps/web/next-env.d.ts
 # Evolution store/sessão montados em dev (não versionar)
 .evolution-store/
 .evolution-instances/
+
+# ── Skills de agente de IA (ferramenta pessoal, não do projeto) ────────────────
+.agents/
+.claude/skills/
+skills-lock.json

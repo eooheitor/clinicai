@@ -10,6 +10,8 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build:api": "npm run build --workspace=apps/api",
     "build:web": "npm run build --workspace=apps/web",
+    "test:api": "npm run test --workspace=apps/api",
+    "test:api:watch": "npm run test:watch --workspace=apps/api",
     "db:migrate": "npm run prisma:migrate --workspace=apps/api",
     "db:deploy": "npm run prisma:deploy --workspace=apps/api",
     "db:studio": "npm run prisma:studio --workspace=apps/api",
