@@ -11,6 +11,7 @@ import { panelRouter } from "./routes/panel.routes";
 import { prisma } from "./database/prisma";
 import { startReminderJob } from "./jobs/reminder.job";
 import { startTrialExpiryJob } from "./jobs/trial-expiry.job";
+import { startSubscriptionRenewalJob } from "./jobs/subscription.job";
 
 const app = express();
 
@@ -60,6 +61,7 @@ async function main() {
 
   startReminderJob();
   startTrialExpiryJob();
+  startSubscriptionRenewalJob();
 
   app.listen(config.PORT, "0.0.0.0", () => {
     console.log(`🚀 FluxoIA Zap API rodando na porta ${config.PORT}`);

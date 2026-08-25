@@ -1,61 +1,64 @@
-version: "3.9"
-
-# Stack de produção — Docker Swarm + Traefik.
-# Substitua DOMAIN_API e DOMAIN_WEB pelos seus domínios reais antes de fazer deploy.
-# Exemplo: DOMAIN_API=api.meusite.com / DOMAIN_WEB=app.meusite.com
+# Stack de produção — VM única com Docker Compose (não Swarm).
+# Traefik cuida de TLS (Let's Encrypt) e roteamento; Postgres e Evolution ficam
+# só na rede interna, sem exposição pública.
 #
-# Build das imagens:
-#   docker build -t clinicai-api:latest ./apps/api
-#   docker build -t clinicai-web:latest --build-arg NEXT_PUBLIC_API_URL=https://$DOMAIN_API ./apps/web
-#   docker build -t clinicai-evolution:latest ./docker/evolution.Dockerfile  (se usar patch)
+# Antes do primeiro deploy:
+#   1. Preencher no .env (raiz do projeto): DOMAIN_API, DOMAIN_WEB, ACME_EMAIL,
+#      POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, EVOLUTION_API_KEY, e o
+#      resto das variáveis normais da API (ver .env.example).
+#   2. WEB_URL no .env deve ser https://$DOMAIN_WEB (usado pelo CORS da API).
+#   3. Apontar os DNS de DOMAIN_API e DOMAIN_WEB pro IP da VM.
 #
-# Deploy:
-#   docker stack deploy -c docker-compose.prod.yml clinicai
+# Deploy (roda tudo: build + subida):
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Aplicar só migrações sem subir tudo de novo: o container da api já roda
+# `prisma migrate deploy` sozinho no boot (ver apps/api/Dockerfile).
 
 services:
-  api:
-    image: clinicai-api:latest
-    env_file: ./.env
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
-      # Leitura da store do Evolution para resolver @lid → número real
-      - evolution_store:/evolution/store:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
     networks:
-      - network_public
-      - clinicai_internal
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      labels:
-        - traefik.enable=true
-        - traefik.http.routers.clinicai_api.entrypoints=websecure
-        - traefik.http.routers.clinicai_api.rule=Host(`${DOMAIN_API}`)
-        - traefik.http.routers.clinicai_api.tls.certresolver=letsencryptresolver
-        - traefik.http.routers.clinicai_api.service=clinicai_api
-        - traefik.http.services.clinicai_api.loadbalancer.server.port=3000
+      - clinicai_net
 
-  web:
-    image: clinicai-web:latest
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - network_public
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      labels:
-        - traefik.enable=true
-        - traefik.http.routers.clinicai_web.entrypoints=websecure
-        - traefik.http.routers.clinicai_web.rule=Host(`${DOMAIN_WEB}`)
-        - traefik.http.routers.clinicai_web.tls.certresolver=letsencryptresolver
-        - traefik.http.routers.clinicai_web.service=clinicai_web
-        - traefik.http.services.clinicai_web.loadbalancer.server.port=3001
+      - clinicai_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   evolution:
     image: atendai/evolution-api:v1.8.7
+    restart: unless-stopped
     environment:
       - SERVER_URL=http://evolution:8080
       - AUTHENTICATION_TYPE=apikey
@@ -71,20 +74,56 @@ services:
       - evolution_store:/evolution/store
       - evolution_instances:/evolution/instances
     networks:
-      - clinicai_internal
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      labels:
-        - traefik.enable=false
+      - clinicai_net
+    # Sem labels do Traefik de propósito: só a api fala com a Evolution,
+    # via rede interna. Não precisa (nem deve) ficar exposta na internet.
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: ./.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Leitura da store do Evolution para resolver @lid → número real
+      - evolution_store:/evolution/store:ro
+    networks:
+      - clinicai_net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=clinicai_net
+      - traefik.http.routers.clinicai_api.entrypoints=websecure
+      - traefik.http.routers.clinicai_api.rule=Host(`${DOMAIN_API}`)
+      - traefik.http.routers.clinicai_api.tls.certresolver=letsencrypt
+      - traefik.http.services.clinicai_api.loadbalancer.server.port=3000
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://${DOMAIN_API}
+    restart: unless-stopped
+    env_file: ./.env
+    networks:
+      - clinicai_net
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=clinicai_net
+      - traefik.http.routers.clinicai_web.entrypoints=websecure
+      - traefik.http.routers.clinicai_web.rule=Host(`${DOMAIN_WEB}`)
+      - traefik.http.routers.clinicai_web.tls.certresolver=letsencrypt
+      - traefik.http.services.clinicai_web.loadbalancer.server.port=3001
 
 networks:
-  network_public:
-    external: true
-  clinicai_internal:
-    driver: overlay
+  clinicai_net:
+    driver: bridge
 
 volumes:
+  postgres_data:
   evolution_store:
   evolution_instances:
+  traefik_certs:

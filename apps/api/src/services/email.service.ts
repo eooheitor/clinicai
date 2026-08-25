@@ -258,6 +258,29 @@ export const emailService = {
     if (error) throw new Error(`Resend: ${error.name} — ${error.message}`);
   },
 
+  async sendRenewalEmail(params: { to: string; name: string; clinicName: string; checkoutUrl: string; expiresAt: Date }) {
+    if (!config.RESEND_API_KEY) {
+      console.log(`📧 [email simulado] Renovação para ${params.to} — vence em ${params.expiresAt.toISOString()}`);
+      return;
+    }
+    const expiresFormatted = params.expiresAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    const { error } = await resend.emails.send({
+      from: config.FROM_EMAIL,
+      to: params.to,
+      subject: "Sua assinatura vence em breve — ClinicAI",
+      html: buildEmailHtml({
+        previewText: `A assinatura de ${params.clinicName} vence em ${expiresFormatted}. Renove para não perder o acesso.`,
+        eyebrow: "Renovação de assinatura",
+        title: `Sua assinatura vence em ${expiresFormatted}`,
+        body: `<strong style="color:#0f1714">${params.clinicName}</strong> está com a assinatura próxima do vencimento. Para continuar recebendo agendamentos e atendendo pacientes sem interrupção, renove agora por <strong style="color:#0f1714">R$79,90/mês</strong>.`,
+        ctaLabel: "Renovar agora  →",
+        ctaUrl: params.checkoutUrl,
+        footer: "Se a renovação já foi feita, ignore este e-mail — pode levar alguns minutos para atualizar.",
+      }),
+    });
+    if (error) throw new Error(`Resend: ${error.name} — ${error.message}`);
+  },
+
   async sendSuspensionEmail(params: { to: string; name: string; clinicName: string }) {
     if (!config.RESEND_API_KEY) {
       console.log(`📧 [email simulado] Conta suspensa para ${params.to}`);

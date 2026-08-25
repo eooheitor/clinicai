@@ -69,8 +69,7 @@ export const evolutionService = {
   },
 
   async setWebhook(instanceName: string, webhookUrl: string) {
-    const secret = config.EVOLUTION_WEBHOOK_SECRET;
-    const url = secret ? `${webhookUrl}?token=${secret}` : webhookUrl;
+    const url = `${webhookUrl}?token=${config.EVOLUTION_WEBHOOK_SECRET}`;
     const { data } = await api.post(`/webhook/set/${instanceName}`, {
       url,
       byEvents: false,

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { config } from "../config";
 import { prisma } from "../database/prisma";
 import { conversationService } from "../services/conversation.service";
 import { openaiService } from "../services/openai.service";
@@ -111,13 +112,10 @@ export async function evolutionWebhookHandler(
   req: Request,
   res: Response
 ): Promise<void> {
-  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
-  if (secret) {
-    const token = req.query.token as string | undefined;
-    if (token !== secret) {
-      res.status(401).json({ ok: false });
-      return;
-    }
+  const token = req.query.token as string | undefined;
+  if (token !== config.EVOLUTION_WEBHOOK_SECRET) {
+    res.status(401).json({ ok: false });
+    return;
   }
 
   res.status(200).json({ ok: true });
