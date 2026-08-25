@@ -161,7 +161,7 @@ export default function MasterAnalyticsPage() {
                   <Tooltip
                     contentStyle={{ background: chart.card, border: `1px solid ${chart.border}`, borderRadius: 10, fontSize: 12 }}
                     labelStyle={{ color: chart.text }}
-                    formatter={(v: number) => [v, "cadastros"]}
+                    formatter={(v) => [v, "cadastros"]}
                   />
                   <Area type="monotone" dataKey="count" stroke={chart.accent} strokeWidth={2} fill="url(#grad-signups)" dot={false} />
                 </AreaChart>
@@ -183,7 +183,7 @@ export default function MasterAnalyticsPage() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ background: chart.card, border: `1px solid ${chart.border}`, borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: number, _: string, props: any) => [v, STATUS_LABEL[props.payload.status] ?? props.payload.status]}
+                      formatter={(v, _n, props: any) => [v, STATUS_LABEL[props.payload.status] ?? props.payload.status]}
                     />
                   </PieChart>
                   <div className="flex flex-col gap-2">
