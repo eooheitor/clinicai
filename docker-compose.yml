@@ -7,9 +7,9 @@ services:
     container_name: clinicai-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-fluxoia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fluxoia123}
-      POSTGRES_DB: ${POSTGRES_DB:-fluxoiazap}
+      POSTGRES_USER: ${POSTGRES_USER:-clinicai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinicai123}
+      POSTGRES_DB: ${POSTGRES_DB:-clinicai}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
