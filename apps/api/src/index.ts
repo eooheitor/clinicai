@@ -64,7 +64,7 @@ async function main() {
   startSubscriptionRenewalJob();
 
   app.listen(config.PORT, "0.0.0.0", () => {
-    console.log(`🚀 FluxoIA Zap API rodando na porta ${config.PORT}`);
+    console.log(`🚀 ClinicAI API rodando na porta ${config.PORT}`);
     console.log(`   Auth:  /auth/login`);
     console.log(`   Panel: /panel/*`);
   });
