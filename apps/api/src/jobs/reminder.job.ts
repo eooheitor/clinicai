@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { evolutionService } from "../services/evolution.service";
 import { conversationService } from "../services/conversation.service";
+import { isSubscriptionBlocked } from "../utils/subscription";
 
 const INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
 
@@ -53,7 +54,7 @@ async function sendReminders() {
   for (const appointment of appointments) {
     const { clinic, patientPhone, patientName, service, scheduledAt } = appointment;
 
-    if (!clinic.active || !clinic.reminderEnabled) continue;
+    if (!clinic.active || !clinic.reminderEnabled || isSubscriptionBlocked(clinic)) continue;
 
     try {
       const message = buildReminderMessage(

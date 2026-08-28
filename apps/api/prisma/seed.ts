@@ -88,9 +88,11 @@ function pick<T>(arr: T[], i: number): T {
 }
 
 async function main() {
-  const clinic =
-    (await prisma.clinic.findUnique({ where: { slug: "clinica-demo" } })) ??
-    (await prisma.clinic.findFirst());
+  const targetSlug = process.argv[2];
+  const clinic = targetSlug
+    ? await prisma.clinic.findUnique({ where: { slug: targetSlug } })
+    : (await prisma.clinic.findUnique({ where: { slug: "clinica-demo" } })) ??
+      (await prisma.clinic.findFirst());
 
   if (!clinic) {
     console.error("❌ Nenhuma clínica encontrada. Crie uma conta antes de rodar o seed.");

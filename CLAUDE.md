@@ -224,4 +224,4 @@ shadow-[inset_3px_0_0_var(--aqua)] // indicador lateral ativo (sidebar)
 - Ao criar migration: pare a API antes, depois `npm run db:migrate -- --name descricao`
 - Não adicione comentários de código desnecessários — o código deve ser autoexplicativo
 - Não crie arquivos de documentação extras além deste CLAUDE.md e o README.md
-- Nomeie branches como `tipo-descricao-da-atividade`, em kebab-case, sem barra. `tipo` é `feat`, `fix` ou `bug`. Exemplo: `fix-arquivos-dockerfile-incorretos`
+- Nomeie branches como `tipo/descricao-da-atividade`, em kebab-case. `tipo` é `feat`, `fix` ou `bug`. Exemplo: `fix/arquivos-dockerfile-incorretos`

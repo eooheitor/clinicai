@@ -12,8 +12,9 @@ import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { useChartTheme } from "@/hooks/use-chart-theme";
 import { cn, getInitials, maskPhoneBR } from "@/lib/utils";
 import {
-  MessageSquare, Calendar, Users, UserCog, ArrowRight, Clock, Sparkles, CalendarClock, PieChart as PieIcon,
+  MessageSquare, Calendar, Users, UserCog, ArrowRight, Clock, Sparkles, CalendarClock, PieChart as PieIcon, ShieldAlert,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Area, AreaChart, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
@@ -71,10 +72,30 @@ export default function DashboardPage() {
     api.get<{ conversations: Conv[] }>("/panel/conversations").then((d) => setRecent(d.conversations.slice(0, 6))).catch(() => {});
   }, []);
 
+  if (error === "subscription_required") {
+    return (
+      <div className={wrap}>
+        <div className="surface elevate-sm mx-auto flex max-w-md flex-col items-center gap-3 rounded-2xl p-8 text-center">
+          <span className="flex size-12 items-center justify-center rounded-xl bg-[var(--warning-soft)] text-[var(--warning)]">
+            <ShieldAlert className="size-6" />
+          </span>
+          <h2 className="font-display text-lg font-semibold text-foreground">Assinatura inativa</h2>
+          <p className="text-sm text-muted-foreground">
+            Seu período de teste terminou ou sua assinatura está inativa. Renove para continuar usando o painel.
+          </p>
+          <Link href="/assinar" className="mt-2">
+            <Button size="lg">Ver planos</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className={wrap}>
-        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-6 text-sm text-destructive">Erro ao carregar dashboard: {error}</div>
+        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-6 text-sm text-destructive">
+          Não foi possível carregar o dashboard. Tente novamente em instantes.
+        </div>
       </div>
     );
   }
