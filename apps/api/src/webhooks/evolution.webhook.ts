@@ -6,6 +6,7 @@ import { openaiService } from "../services/openai.service";
 // import { claudeService } from "../services/claude.service"; // rollback: trocar openaiService por claudeService
 import { evolutionService } from "../services/evolution.service";
 import { transcriptionService } from "../services/transcription.service";
+import { isSubscriptionBlocked } from "../utils/subscription";
 import { Clinic } from "@prisma/client";
 
 const BUFFER_DELAY_MS = 8_000;  // aguarda 8s por mais mensagens antes de processar
@@ -149,6 +150,11 @@ export async function evolutionWebhookHandler(
       include: { preset: { include: { documents: true } }, documents: true },
     });
     if (!clinic) return;
+
+    if (isSubscriptionBlocked(clinic)) {
+      console.log(`⛔ [${instanceName}] ${contactPhone} — assinatura inativa, IA pausada`);
+      return;
+    }
 
     const conversation = await conversationService.getOrCreate(clinic.id, contactPhone);
 

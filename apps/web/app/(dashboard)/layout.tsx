@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { getUser, type AuthUser } from "@/lib/auth";
+import { getUser, isSubscriptionBlocked, updateStoredUser, type AuthUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { BotMessageSquare, Clock, AlertTriangle, Menu } from "lucide-react";
 import { differenceInDays } from "date-fns";
@@ -11,8 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { AppSidebar } from "@/components/app-sidebar";
 
+const ALLOWED_WHEN_BLOCKED = ["/assinar", "/perfil"];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [humanCount, setHumanCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,6 +28,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     setUser(u);
   }, [router]);
+
+  useEffect(() => {
+    api
+      .get<AuthUser>("/auth/me")
+      .then((fresh) => {
+        updateStoredUser(fresh);
+        setUser(fresh);
+      })
+      .catch(() => {});
+  }, []);
+
+  const blocked = isSubscriptionBlocked(user);
+
+  useEffect(() => {
+    if (blocked && !ALLOWED_WHEN_BLOCKED.includes(pathname)) {
+      router.replace("/assinar");
+    }
+  }, [blocked, pathname, router]);
 
   useEffect(() => {
     function fetchHuman() {
@@ -44,7 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-dvh bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-sidebar-border lg:block">
-        <AppSidebar user={user} humanCount={humanCount} />
+        <AppSidebar user={user} humanCount={humanCount} blocked={blocked} />
       </aside>
 
       {/* Content column */}
@@ -57,7 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </SheetTrigger>
             <SheetContent side="left" showCloseButton={false} className="w-72 max-w-[80vw] p-0">
               <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-              <AppSidebar user={user} humanCount={humanCount} onNavigate={() => setMenuOpen(false)} />
+              <AppSidebar user={user} humanCount={humanCount} blocked={blocked} onNavigate={() => setMenuOpen(false)} />
             </SheetContent>
           </Sheet>
           <div className="flex items-center gap-2">

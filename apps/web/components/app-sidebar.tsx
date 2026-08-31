@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, MessageSquare, Users, Calendar, Settings, Smartphone,
-  LogOut, BotMessageSquare, Building2, UserCircle, Sparkles, BarChart3, type LucideIcon,
+  LogOut, BotMessageSquare, Building2, UserCircle, Sparkles, BarChart3, Lock, type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn, getInitials } from "@/lib/utils";
@@ -41,10 +41,12 @@ export function navItemsFor(role: string | undefined, humanCount: number): NavIt
 export function AppSidebar({
   user,
   humanCount,
+  blocked,
   onNavigate,
 }: {
   user: AuthUser;
   humanCount: number;
+  blocked?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -75,6 +77,21 @@ export function AppSidebar({
         {items.map((item) => {
           const active = item.href === activeHref;
           const Icon = item.icon;
+
+          if (blocked) {
+            return (
+              <span
+                key={item.href}
+                title="Disponível após reativar sua assinatura"
+                className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground/50"
+              >
+                <Icon className="size-[1.05rem] shrink-0" strokeWidth={2} />
+                <span className="flex-1">{item.label}</span>
+                <Lock className="size-3.5 shrink-0" />
+              </span>
+            );
+          }
+
           return (
             <Link
               key={item.href}
